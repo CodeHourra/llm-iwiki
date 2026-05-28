@@ -1,0 +1,38 @@
+# Rust
+target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent and local worktree state
+.agents/
+.worktrees/
+
+# LLM-iWiki runtime task exchange
+.llm-iwiki/
+
+# Build output
+dist/
+node_modules/
+.nuxt/
+*.exe
+*.dmg
+*.AppImage
+
+# Tauri
+# 自动更新签名私钥（`tauri signer generate -w *.key`），切勿提交
+*.updater.key
+
+# Env
+.env
+.env.local
+
+# XunJi runtime data
+.xunji/
