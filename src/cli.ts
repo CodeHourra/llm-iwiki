@@ -5,6 +5,7 @@ import { parseExperiencesYaml, parseSummariesYaml } from './ai-yaml'
 import { openDatabase, runMigrations } from './db'
 import { getAppPaths } from './paths'
 import { renameProject, resolveProject } from './projects'
+import { initSkills, SKILL_TARGETS, type SkillTarget } from './skills'
 
 export interface CliRuntime {
   cwd: string
@@ -152,6 +153,24 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       runtime.stderr(error instanceof Error ? error.message : String(error))
       return 1
     }
+  }
+
+  if (args[0] === 'skills' && args[1] === 'init') {
+    const targetFlag = readFlag(args, '--target')
+    if (targetFlag && !(SKILL_TARGETS as readonly string[]).includes(targetFlag)) {
+      runtime.stderr('Invalid --target. Use codex, claude-code, or cursor.')
+      return 1
+    }
+    const target = targetFlag as SkillTarget | null
+    const result = initSkills({
+      cwd: runtime.cwd,
+      target,
+      force: args.includes('--force'),
+      dryRun: args.includes('--dry-run'),
+    })
+    runtime.stdout(`skills written: ${result.written.length}`)
+    runtime.stdout(`skills skipped: ${result.skipped.length}`)
+    return 0
   }
 
   runtime.stderr(`Unknown command: ${args.join(' ')}`)

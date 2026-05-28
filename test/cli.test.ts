@@ -258,6 +258,44 @@ summaries:
   expect(stderr).toEqual([])
 })
 
+test('skills init dry-run reports writes without creating files', async () => {
+  const homeDir = join(tmpRoot, 'skills-dry-run-home')
+  const projectDir = join(tmpRoot, 'skills-dry-run-project')
+  const { runtime, stdout, stderr } = createRuntime(homeDir, projectDir)
+
+  const exitCode = await runCli(['skills', 'init', '--dry-run'], runtime)
+
+  expect(exitCode).toBe(0)
+  expect(stdout).toEqual(['skills written: 3', 'skills skipped: 0'])
+  expect(stderr).toEqual([])
+  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-after-session/SKILL.md'))).toBe(false)
+})
+
+test('skills init rejects invalid target', async () => {
+  const homeDir = join(tmpRoot, 'skills-invalid-target-home')
+  const { runtime, stdout, stderr } = createRuntime(homeDir)
+
+  const exitCode = await runCli(['skills', 'init', '--target', 'vim'], runtime)
+
+  expect(exitCode).toBe(1)
+  expect(stdout).toEqual([])
+  expect(stderr).toEqual(['Invalid --target. Use codex, claude-code, or cursor.'])
+})
+
+test('skills init skips existing files unless forced', async () => {
+  const homeDir = join(tmpRoot, 'skills-skip-home')
+  const projectDir = join(tmpRoot, 'skills-skip-project')
+  const firstRun = createRuntime(homeDir, projectDir)
+  const secondRun = createRuntime(homeDir, projectDir)
+
+  await runCli(['skills', 'init'], firstRun.runtime)
+  const exitCode = await runCli(['skills', 'init'], secondRun.runtime)
+
+  expect(exitCode).toBe(0)
+  expect(secondRun.stdout).toEqual(['skills written: 0', 'skills skipped: 3'])
+  expect(secondRun.stderr).toEqual([])
+})
+
 test('summarize apply reports concise validation errors', async () => {
   const homeDir = join(tmpRoot, 'invalid-summaries-home')
   const fixtureDir = join(tmpRoot, 'fixtures')
