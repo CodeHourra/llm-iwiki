@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
 
 import { openDatabase, runMigrations } from './db'
 import { getAppPaths } from './paths'
@@ -22,6 +23,10 @@ Usage:
   llm-iwiki experiences propose --project <path> --file <experiences.yaml>
   llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 `
+
+function resolveCliPath(cwd: string, targetPath: string): string {
+  return isAbsolute(targetPath) ? targetPath : resolve(cwd, targetPath)
+}
 
 export async function runCli(args: string[], runtime: CliRuntime): Promise<number> {
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
@@ -73,7 +78,7 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     const db = openDatabase(paths.databaseFile)
     try {
       runMigrations(db)
-      const project = resolveProject(db, targetPath === '.' ? runtime.cwd : targetPath)
+      const project = resolveProject(db, resolveCliPath(runtime.cwd, targetPath))
       runtime.stdout(JSON.stringify(project, null, 2))
       return 0
     } catch (error) {
@@ -97,7 +102,7 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       runMigrations(db)
       const project = target.startsWith('proj_')
         ? renameProject(db, target, displayName)
-        : renameProject(db, resolveProject(db, target === '.' ? runtime.cwd : target).id, displayName)
+        : renameProject(db, resolveProject(db, resolveCliPath(runtime.cwd, target)).id, displayName)
       runtime.stdout(JSON.stringify(project, null, 2))
       return 0
     } catch (error) {

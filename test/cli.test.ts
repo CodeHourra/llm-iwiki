@@ -150,6 +150,35 @@ test('projects resolve and rename preserve display name for path identity', asyn
   expect(repeatedResolve.displayName).toBe('XunJi Knowledge Base')
 })
 
+test('projects resolve and rename relative paths against runtime cwd', async () => {
+  const homeDir = join(tmpRoot, 'relative-path-home')
+  const checkoutRoot = join(tmpRoot, 'relative-checkout')
+  const childDir = join(checkoutRoot, 'child')
+  mkdirSync(childDir, { recursive: true })
+  const runtime = createRuntime(homeDir, checkoutRoot)
+
+  await runCli(['init'], runtime.runtime)
+
+  const resolveExitCode = await runCli(['projects', 'resolve', 'child'], runtime.runtime)
+  const resolved = JSON.parse(runtime.stdout.at(-1) ?? '{}') as {
+    id: string
+    canonicalName: string
+    displayName: string | null
+  }
+
+  expect(resolveExitCode).toBe(0)
+  expect(runtime.stderr).toEqual([])
+  expect(resolved.canonicalName).toBe('child')
+  expect(resolved.displayName).toBeNull()
+
+  const renameExitCode = await runCli(['projects', 'rename', 'child', 'Child Project'], runtime.runtime)
+  const renamed = JSON.parse(runtime.stdout.at(-1) ?? '{}') as { id: string; displayName: string | null }
+
+  expect(renameExitCode).toBe(0)
+  expect(renamed.id).toBe(resolved.id)
+  expect(renamed.displayName).toBe('Child Project')
+})
+
 test('projects resolve fails for nonexistent path without inserting a project', async () => {
   const homeDir = join(tmpRoot, 'missing-path-home')
   const missingPath = join(tmpRoot, 'does-not-exist')
