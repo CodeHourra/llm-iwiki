@@ -20,6 +20,15 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   return value
 }
 
+function optionalConfidence(record: Record<string, unknown>): Confidence | null {
+  if (!('confidence' in record)) return null
+  const confidence = record.confidence
+  if (typeof confidence !== 'string' || !CONFIDENCE_VALUES.has(confidence as Confidence)) {
+    throw new Error(`Invalid confidence: ${String(confidence)}`)
+  }
+  return confidence as Confidence
+}
+
 export function parseSummariesYaml(source: string): ParsedSummariesYaml {
   const root = asRecord(parse(source), 'summaries.yaml')
   const projectId = requiredString(root, 'project_id')
@@ -31,6 +40,7 @@ export function parseSummariesYaml(source: string): ParsedSummariesYaml {
       const record = asRecord(item, `summaries[${index}]`)
       const value = requiredString(record, 'value')
       if (!SUMMARY_VALUES.has(value as SummaryValue)) throw new Error(`Invalid summary value: ${value}`)
+      optionalConfidence(record)
       return {
         sessionId: requiredString(record, 'session_id'),
         title: requiredString(record, 'title'),
@@ -55,10 +65,7 @@ export function parseExperiencesYaml(source: string): ParsedExperiencesYaml {
       if (!Array.isArray(sourceSessions) || sourceSessions.some((value) => typeof value !== 'string')) {
         throw new Error(`experiences[${index}].source_sessions must be a string array`)
       }
-      const confidence = typeof record.confidence === 'string' ? record.confidence : null
-      if (confidence && !CONFIDENCE_VALUES.has(confidence as Confidence)) {
-        throw new Error(`Invalid confidence: ${confidence}`)
-      }
+      const confidence = optionalConfidence(record)
       return {
         title: requiredString(record, 'title'),
         slug: typeof record.slug === 'string' ? record.slug : null,

@@ -30,6 +30,20 @@ summaries:
   ).toThrow('Invalid summary value')
 })
 
+test('parseSummariesYaml rejects invalid confidence value when present', () => {
+  expect(() =>
+    parseSummariesYaml(`
+project_id: proj_123
+summaries:
+  - session_id: ses_1
+    title: bad confidence
+    value: high
+    confidence: certain
+    summary_markdown: bad
+`),
+  ).toThrow('Invalid confidence')
+})
+
 test('parseExperiencesYaml accepts required fields', () => {
   const result = parseExperiencesYaml(`
 project_id: proj_123
@@ -45,4 +59,19 @@ experiences:
 `)
 
   expect(result.experiences[0].sourceSessions).toEqual(['ses_1'])
+})
+
+test('parseExperiencesYaml rejects non-string confidence when present', () => {
+  expect(() =>
+    parseExperiencesYaml(`
+project_id: proj_123
+experiences:
+  - title: Cursor SQLite + Lexical
+    summary: bad confidence
+    body_markdown: bad
+    confidence: 1
+    source_sessions:
+      - ses_1
+`),
+  ).toThrow('Invalid confidence')
 })
