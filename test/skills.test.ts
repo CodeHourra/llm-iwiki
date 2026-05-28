@@ -25,6 +25,18 @@ test('initSkills with target adds target guidance', () => {
   expect(content).toContain('Codex')
 })
 
+test('initSkills without force skips existing skills without overwriting', () => {
+  const skillFile = join(tmpRoot, '.agents/skills/aiwiki-before-debug/SKILL.md')
+
+  initSkills({ cwd: tmpRoot, force: false, dryRun: false, target: null })
+  writeFileSync(skillFile, 'custom content')
+  const result = initSkills({ cwd: tmpRoot, force: false, dryRun: false, target: null })
+
+  expect(result.written.length).toBe(0)
+  expect(result.skipped.length).toBe(3)
+  expect(readFileSync(skillFile, 'utf8')).toBe('custom content')
+})
+
 test('initSkills with force overwrites existing skills', () => {
   const skillFile = join(tmpRoot, '.agents/skills/aiwiki-before-debug/SKILL.md')
 

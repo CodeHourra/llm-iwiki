@@ -124,6 +124,10 @@ This skill is initialized for ${TARGET_NAMES[target]}.
 `
 }
 
+function isFileExistsError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'EEXIST'
+}
+
 export function initSkills(options: InitSkillsOptions): InitSkillsResult {
   const written: string[] = []
   const skipped: string[] = []
@@ -143,7 +147,21 @@ export function initSkills(options: InitSkillsOptions): InitSkillsResult {
     }
 
     mkdirSync(dirname(filePath), { recursive: true })
-    writeFileSync(filePath, appendTargetGuidance(template.content, options.target))
+    const content = appendTargetGuidance(template.content, options.target)
+    if (options.force) {
+      writeFileSync(filePath, content)
+      continue
+    }
+
+    try {
+      writeFileSync(filePath, content, { flag: 'wx' })
+    } catch (error) {
+      if (!isFileExistsError(error)) {
+        throw error
+      }
+      written.pop()
+      skipped.push(filePath)
+    }
   }
 
   return { written, skipped }

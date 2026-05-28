@@ -157,6 +157,10 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
 
   if (args[0] === 'skills' && args[1] === 'init') {
     const targetFlag = readFlag(args, '--target')
+    if (args.includes('--target') && !targetFlag) {
+      runtime.stderr('Invalid --target. Use codex, claude-code, or cursor.')
+      return 1
+    }
     if (targetFlag && !(SKILL_TARGETS as readonly string[]).includes(targetFlag)) {
       runtime.stderr('Invalid --target. Use codex, claude-code, or cursor.')
       return 1

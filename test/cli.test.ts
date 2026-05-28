@@ -282,6 +282,19 @@ test('skills init rejects invalid target', async () => {
   expect(stderr).toEqual(['Invalid --target. Use codex, claude-code, or cursor.'])
 })
 
+test('skills init rejects target without a value and writes no files', async () => {
+  const homeDir = join(tmpRoot, 'skills-missing-target-home')
+  const projectDir = join(tmpRoot, 'skills-missing-target-project')
+  const { runtime, stdout, stderr } = createRuntime(homeDir, projectDir)
+
+  const exitCode = await runCli(['skills', 'init', '--target'], runtime)
+
+  expect(exitCode).toBe(1)
+  expect(stdout).toEqual([])
+  expect(stderr).toEqual(['Invalid --target. Use codex, claude-code, or cursor.'])
+  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-after-session/SKILL.md'))).toBe(false)
+})
+
 test('skills init skips existing files unless forced', async () => {
   const homeDir = join(tmpRoot, 'skills-skip-home')
   const projectDir = join(tmpRoot, 'skills-skip-project')
