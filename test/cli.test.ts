@@ -1,23 +1,24 @@
 import { afterEach, expect, test } from 'bun:test'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { runCli } from '../src/cli'
 import { getAppPaths } from '../src/paths'
 
-const tmpRoot = join(import.meta.dir, '.tmp-cli')
+const tmpRoot = join(tmpdir(), 'llm-iwiki-cli-test')
 
 afterEach(() => {
   rmSync(tmpRoot, { recursive: true, force: true })
 })
 
-function createRuntime(homeDir: string) {
+function createRuntime(homeDir: string, cwd = '/tmp/project') {
   const stdout: string[] = []
   const stderr: string[] = []
 
   return {
     runtime: {
-      cwd: '/tmp/project',
+      cwd,
       homeDir,
       stdout: (message: string) => stdout.push(message),
       stderr: (message: string) => stderr.push(message),
@@ -99,4 +100,42 @@ test('doctor succeeds after init', async () => {
   expect(doctorRuntime.stdout).toContain(`config: ${paths.configFile}`)
   expect(doctorRuntime.stdout).toContain(`database: ${paths.databaseFile}`)
   expect(doctorRuntime.stdout).toContain('status: ok')
+})
+
+test('projects resolve and rename preserve display name for path identity', async () => {
+  const homeDir = join(tmpRoot, 'projects-home')
+  const projectDir = join(tmpRoot, 'checkout-without-remote')
+  mkdirSync(projectDir, { recursive: true })
+  const runtime = createRuntime(homeDir, projectDir)
+
+  await runCli(['init'], runtime.runtime)
+
+  const resolveExitCode = await runCli(['projects', 'resolve', '.'], runtime.runtime)
+  const resolved = JSON.parse(runtime.stdout.at(-1) ?? '{}') as {
+    id: string
+    canonicalName: string
+    displayName: string | null
+    identitySource: string
+  }
+
+  expect(resolveExitCode).toBe(0)
+  expect(runtime.stderr).toEqual([])
+  expect(resolved.id).toStartWith('proj_')
+  expect(resolved.canonicalName).toBe('checkout-without-remote')
+  expect(resolved.displayName).toBeNull()
+  expect(resolved.identitySource).toBe('path')
+
+  const renameExitCode = await runCli(['projects', 'rename', '.', 'XunJi Knowledge Base'], runtime.runtime)
+  const renamed = JSON.parse(runtime.stdout.at(-1) ?? '{}') as { id: string; displayName: string | null }
+
+  expect(renameExitCode).toBe(0)
+  expect(renamed.id).toBe(resolved.id)
+  expect(renamed.displayName).toBe('XunJi Knowledge Base')
+
+  const repeatedResolveExitCode = await runCli(['projects', 'resolve', '.'], runtime.runtime)
+  const repeatedResolve = JSON.parse(runtime.stdout.at(-1) ?? '{}') as { id: string; displayName: string | null }
+
+  expect(repeatedResolveExitCode).toBe(0)
+  expect(repeatedResolve.id).toBe(resolved.id)
+  expect(repeatedResolve.displayName).toBe('XunJi Knowledge Base')
 })

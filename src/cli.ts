@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 
 import { openDatabase, runMigrations } from './db'
 import { getAppPaths } from './paths'
+import { renameProject, resolveProject } from './projects'
 
 export interface CliRuntime {
   cwd: string
@@ -64,6 +65,41 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     runtime.stdout(`database: ${paths.databaseFile}`)
     runtime.stdout('status: ok')
     return 0
+  }
+
+  if (args[0] === 'projects' && args[1] === 'resolve') {
+    const targetPath = args[2] ?? runtime.cwd
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = resolveProject(db, targetPath === '.' ? runtime.cwd : targetPath)
+      runtime.stdout(JSON.stringify(project, null, 2))
+      return 0
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'projects' && args[1] === 'rename') {
+    const target = args[2]
+    const displayName = args[3]
+    if (!target || !displayName) {
+      runtime.stderr('Usage: llm-iwiki projects rename <path-or-project-id> <display-name>')
+      return 1
+    }
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = target.startsWith('proj_')
+        ? renameProject(db, target, displayName)
+        : renameProject(db, resolveProject(db, target === '.' ? runtime.cwd : target).id, displayName)
+      runtime.stdout(JSON.stringify(project, null, 2))
+      return 0
+    } finally {
+      db.close()
+    }
   }
 
   runtime.stderr(`Unknown command: ${args.join(' ')}`)
