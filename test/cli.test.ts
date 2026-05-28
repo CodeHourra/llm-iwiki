@@ -233,6 +233,31 @@ summaries:
   expect(stderr).toEqual([])
 })
 
+test('summarize apply resolves relative file paths against runtime cwd', async () => {
+  const homeDir = join(tmpRoot, 'relative-summaries-home')
+  const projectDir = join(tmpRoot, 'relative-yaml-project')
+  const summariesFile = join(projectDir, 'summaries.yaml')
+  mkdirSync(projectDir, { recursive: true })
+  writeFileSync(
+    summariesFile,
+    `
+project_id: proj_123
+summaries:
+  - session_id: ses_1
+    title: 解析 Cursor 会话
+    value: high
+    summary_markdown: ok
+`,
+  )
+  const { runtime, stdout, stderr } = createRuntime(homeDir, projectDir)
+
+  const exitCode = await runCli(['summarize', 'apply', '--file', 'summaries.yaml'], runtime)
+
+  expect(exitCode).toBe(0)
+  expect(stdout).toEqual(['validated summaries: 1'])
+  expect(stderr).toEqual([])
+})
+
 test('summarize apply reports concise validation errors', async () => {
   const homeDir = join(tmpRoot, 'invalid-summaries-home')
   const fixtureDir = join(tmpRoot, 'fixtures')
@@ -263,6 +288,17 @@ test('summarize apply reports usage when file flag is missing', async () => {
   const { runtime, stdout, stderr } = createRuntime(homeDir)
 
   const exitCode = await runCli(['summarize', 'apply', '--project', '/tmp/project'], runtime)
+
+  expect(exitCode).toBe(1)
+  expect(stdout).toEqual([])
+  expect(stderr).toEqual(['Usage: llm-iwiki summarize apply --project <path> --file <summaries.yaml>'])
+})
+
+test('summarize apply reports usage when file flag value is another flag', async () => {
+  const homeDir = join(tmpRoot, 'invalid-file-flag-home')
+  const { runtime, stdout, stderr } = createRuntime(homeDir)
+
+  const exitCode = await runCli(['summarize', 'apply', '--file', '--project', '.'], runtime)
 
   expect(exitCode).toBe(1)
   expect(stdout).toEqual([])

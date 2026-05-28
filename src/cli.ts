@@ -32,7 +32,9 @@ function resolveCliPath(cwd: string, targetPath: string): string {
 function readFlag(args: string[], name: string): string | null {
   const index = args.indexOf(name)
   if (index === -1) return null
-  return args[index + 1] ?? null
+  const value = args[index + 1]
+  if (!value || value.startsWith('--')) return null
+  return value
 }
 
 export async function runCli(args: string[], runtime: CliRuntime): Promise<number> {
@@ -127,7 +129,7 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       return 1
     }
     try {
-      const parsed = parseSummariesYaml(readFileSync(file, 'utf8'))
+      const parsed = parseSummariesYaml(readFileSync(resolveCliPath(runtime.cwd, file), 'utf8'))
       runtime.stdout(`validated summaries: ${parsed.summaries.length}`)
       return 0
     } catch (error) {
@@ -143,7 +145,7 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       return 1
     }
     try {
-      const parsed = parseExperiencesYaml(readFileSync(file, 'utf8'))
+      const parsed = parseExperiencesYaml(readFileSync(resolveCliPath(runtime.cwd, file), 'utf8'))
       runtime.stdout(`validated experiences: ${parsed.experiences.length}`)
       return 0
     } catch (error) {

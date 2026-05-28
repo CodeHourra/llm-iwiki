@@ -44,6 +44,18 @@ summaries:
   ).toThrow('Invalid confidence')
 })
 
+test('parseSummariesYaml reports missing required item fields with item context', () => {
+  expect(() =>
+    parseSummariesYaml(`
+project_id: proj_123
+summaries:
+  - session_id: ses_1
+    title: missing markdown
+    value: high
+`),
+  ).toThrow('Missing required string: summaries[0].summary_markdown')
+})
+
 test('parseExperiencesYaml accepts required fields', () => {
   const result = parseExperiencesYaml(`
 project_id: proj_123
@@ -74,4 +86,17 @@ experiences:
       - ses_1
 `),
   ).toThrow('Invalid confidence')
+})
+
+test('parseExperiencesYaml reports missing required item fields with item context', () => {
+  expect(() =>
+    parseExperiencesYaml(`
+project_id: proj_123
+experiences:
+  - title: Cursor SQLite + Lexical
+    summary: missing body
+    source_sessions:
+      - ses_1
+`),
+  ).toThrow('Missing required string: experiences[0].body_markdown')
 })

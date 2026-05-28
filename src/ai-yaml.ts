@@ -12,10 +12,10 @@ function asRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-function requiredString(record: Record<string, unknown>, key: string): string {
+function requiredString(record: Record<string, unknown>, key: string, label = key): string {
   const value = record[key]
   if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`Missing required string: ${key}`)
+    throw new Error(`Missing required string: ${label}`)
   }
   return value
 }
@@ -37,15 +37,16 @@ export function parseSummariesYaml(source: string): ParsedSummariesYaml {
   return {
     projectId,
     summaries: root.summaries.map((item, index) => {
+      const itemLabel = `summaries[${index}]`
       const record = asRecord(item, `summaries[${index}]`)
-      const value = requiredString(record, 'value')
+      const value = requiredString(record, 'value', `${itemLabel}.value`)
       if (!SUMMARY_VALUES.has(value as SummaryValue)) throw new Error(`Invalid summary value: ${value}`)
       optionalConfidence(record)
       return {
-        sessionId: requiredString(record, 'session_id'),
-        title: requiredString(record, 'title'),
+        sessionId: requiredString(record, 'session_id', `${itemLabel}.session_id`),
+        title: requiredString(record, 'title', `${itemLabel}.title`),
         value: value as SummaryValue,
-        summaryMarkdown: requiredString(record, 'summary_markdown'),
+        summaryMarkdown: requiredString(record, 'summary_markdown', `${itemLabel}.summary_markdown`),
         metadata: record,
       }
     }),
@@ -60,17 +61,18 @@ export function parseExperiencesYaml(source: string): ParsedExperiencesYaml {
   return {
     projectId,
     experiences: root.experiences.map((item, index) => {
-      const record = asRecord(item, `experiences[${index}]`)
+      const itemLabel = `experiences[${index}]`
+      const record = asRecord(item, itemLabel)
       const sourceSessions = record.source_sessions
       if (!Array.isArray(sourceSessions) || sourceSessions.some((value) => typeof value !== 'string')) {
         throw new Error(`experiences[${index}].source_sessions must be a string array`)
       }
       const confidence = optionalConfidence(record)
       return {
-        title: requiredString(record, 'title'),
+        title: requiredString(record, 'title', `${itemLabel}.title`),
         slug: typeof record.slug === 'string' ? record.slug : null,
-        summary: requiredString(record, 'summary'),
-        bodyMarkdown: requiredString(record, 'body_markdown'),
+        summary: requiredString(record, 'summary', `${itemLabel}.summary`),
+        bodyMarkdown: requiredString(record, 'body_markdown', `${itemLabel}.body_markdown`),
         sourceSessions,
         confidence: confidence as Confidence | null,
         metadata: record,
