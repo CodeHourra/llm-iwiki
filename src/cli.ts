@@ -76,6 +76,9 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       const project = resolveProject(db, targetPath === '.' ? runtime.cwd : targetPath)
       runtime.stdout(JSON.stringify(project, null, 2))
       return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
     } finally {
       db.close()
     }
@@ -97,6 +100,9 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
         : renameProject(db, resolveProject(db, target === '.' ? runtime.cwd : target).id, displayName)
       runtime.stdout(JSON.stringify(project, null, 2))
       return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
     } finally {
       db.close()
     }

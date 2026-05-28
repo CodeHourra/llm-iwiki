@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { runCli } from '../src/cli'
+import { openDatabase } from '../src/db'
 import { getAppPaths } from '../src/paths'
 
 const tmpRoot = join(tmpdir(), 'llm-iwiki-cli-test')
@@ -25,6 +26,15 @@ function createRuntime(homeDir: string, cwd = '/tmp/project') {
     },
     stdout,
     stderr,
+  }
+}
+
+function getProjectCount(databaseFile: string): number {
+  const db = openDatabase(databaseFile)
+  try {
+    return db.query<{ count: number }, []>('SELECT count(*) as count FROM projects').get()?.count ?? 0
+  } finally {
+    db.close()
   }
 }
 
@@ -138,4 +148,33 @@ test('projects resolve and rename preserve display name for path identity', asyn
   expect(repeatedResolveExitCode).toBe(0)
   expect(repeatedResolve.id).toBe(resolved.id)
   expect(repeatedResolve.displayName).toBe('XunJi Knowledge Base')
+})
+
+test('projects resolve fails for nonexistent path without inserting a project', async () => {
+  const homeDir = join(tmpRoot, 'missing-path-home')
+  const missingPath = join(tmpRoot, 'does-not-exist')
+  const paths = getAppPaths(homeDir)
+  const runtime = createRuntime(homeDir)
+
+  await runCli(['init'], runtime.runtime)
+
+  const exitCode = await runCli(['projects', 'resolve', missingPath], runtime.runtime)
+
+  expect(exitCode).toBe(1)
+  expect(runtime.stdout.at(-1)).not.toStartWith('{')
+  expect(runtime.stderr).toEqual([`Path does not exist: ${missingPath}`])
+  expect(getProjectCount(paths.databaseFile)).toBe(0)
+})
+
+test('projects rename reports missing project as a concise cli error', async () => {
+  const homeDir = join(tmpRoot, 'missing-project-home')
+  const runtime = createRuntime(homeDir)
+
+  await runCli(['init'], runtime.runtime)
+
+  const exitCode = await runCli(['projects', 'rename', 'proj_missing', 'Name'], runtime.runtime)
+
+  expect(exitCode).toBe(1)
+  expect(runtime.stdout.at(-1)).not.toStartWith('{')
+  expect(runtime.stderr).toEqual(['Project not found: proj_missing'])
 })

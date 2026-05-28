@@ -5,6 +5,8 @@ import { canonicalizeRemoteUrl, slugifyProjectName } from '../src/projects'
 test('canonicalizeRemoteUrl normalizes git remotes', () => {
   expect(canonicalizeRemoteUrl('git@github.com:CodeHourra/xunji.git')).toBe('github.com/CodeHourra/xunji')
   expect(canonicalizeRemoteUrl('https://github.com/CodeHourra/xunji.git')).toBe('github.com/CodeHourra/xunji')
+  expect(canonicalizeRemoteUrl('https://github.com/CodeHourra/xunji.git/')).toBe('github.com/CodeHourra/xunji')
+  expect(canonicalizeRemoteUrl('ssh://git@github.com/CodeHourra/xunji.git')).toBe('github.com/CodeHourra/xunji')
 })
 
 test('slugifyProjectName keeps readable ascii names stable', () => {

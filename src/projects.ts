@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 
 import type { LlmIwikiDatabase } from './db'
@@ -15,6 +16,8 @@ export interface ProjectRecord {
 export function canonicalizeRemoteUrl(remoteUrl: string): string {
   return remoteUrl
     .trim()
+    .replace(/\/+$/, '')
+    .replace(/^ssh:\/\/git@([^/]+)\//, '$1/')
     .replace(/^git@([^:]+):/, '$1/')
     .replace(/^https?:\/\//, '')
     .replace(/\.git$/, '')
@@ -41,6 +44,8 @@ function git(cwd: string, args: string[]): string | null {
 
 export function resolveProject(db: LlmIwikiDatabase, checkoutPath: string): ProjectRecord {
   const localPath = resolve(checkoutPath)
+  if (!existsSync(localPath)) throw new Error(`Path does not exist: ${localPath}`)
+
   const gitRoot = git(localPath, ['rev-parse', '--show-toplevel'])
   const remote = git(localPath, ['config', '--get', 'remote.origin.url'])
   const canonicalRepoUrl = remote ? canonicalizeRemoteUrl(remote) : null
