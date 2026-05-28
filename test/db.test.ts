@@ -12,17 +12,21 @@ afterEach(() => {
 
 test('runMigrations creates core tables', () => {
   const db = openDatabase(join(tmpRoot, 'llm-iwiki.db'))
-  runMigrations(db)
+  try {
+    runMigrations(db)
 
-  const rows = db
-    .query<{ name: string }, []>("select name from sqlite_master where type = 'table' order by name")
-    .all()
-    .map((row) => row.name)
+    const rows = db
+      .query<{ name: string }, []>("select name from sqlite_master where type = 'table' order by name")
+      .all()
+      .map((row) => row.name)
 
-  expect(rows).toContain('projects')
-  expect(rows).toContain('project_checkouts')
-  expect(rows).toContain('project_aliases')
-  expect(rows).toContain('session_summaries')
-  expect(rows).toContain('experience_candidates')
-  expect(rows).toContain('obsidian_notes')
+    expect(rows).toContain('projects')
+    expect(rows).toContain('project_checkouts')
+    expect(rows).toContain('project_aliases')
+    expect(rows).toContain('session_summaries')
+    expect(rows).toContain('experience_candidates')
+    expect(rows).toContain('obsidian_notes')
+  } finally {
+    db.close()
+  }
 })

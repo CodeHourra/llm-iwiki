@@ -5,6 +5,7 @@ import { getAppPaths } from './paths'
 
 export interface CliRuntime {
   cwd: string
+  homeDir?: string
   stdout: (message: string) => void
   stderr: (message: string) => void
 }
@@ -28,21 +29,37 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
   }
 
   if (args[0] === 'init') {
-    const paths = getAppPaths()
+    const paths = getAppPaths(runtime.homeDir)
     mkdirSync(paths.configDir, { recursive: true })
     if (!existsSync(paths.configFile)) {
       writeFileSync(paths.configFile, 'obsidian_vault = ""\n')
     }
     const db = openDatabase(paths.databaseFile)
-    runMigrations(db)
+    try {
+      runMigrations(db)
+    } finally {
+      db.close()
+    }
     runtime.stdout(`Initialized llm-iwiki at ${paths.configDir}`)
     return 0
   }
 
   if (args[0] === 'doctor') {
-    const paths = getAppPaths()
+    const paths = getAppPaths(runtime.homeDir)
+    if (!existsSync(paths.configFile)) {
+      runtime.stderr('llm-iwiki is not initialized. Run: llm-iwiki init')
+      return 1
+    }
+    if (!existsSync(paths.databaseFile)) {
+      runtime.stderr('llm-iwiki database is missing. Run: llm-iwiki init')
+      return 1
+    }
     const db = openDatabase(paths.databaseFile)
-    runMigrations(db)
+    try {
+      runMigrations(db)
+    } finally {
+      db.close()
+    }
     runtime.stdout(`config: ${paths.configFile}`)
     runtime.stdout(`database: ${paths.databaseFile}`)
     runtime.stdout('status: ok')
