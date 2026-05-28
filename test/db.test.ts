@@ -21,6 +21,7 @@ test('runMigrations creates core tables', () => {
 
   expect(rows).toContain('projects')
   expect(rows).toContain('project_checkouts')
+  expect(rows).toContain('project_aliases')
   expect(rows).toContain('session_summaries')
   expect(rows).toContain('experience_candidates')
   expect(rows).toContain('obsidian_notes')
