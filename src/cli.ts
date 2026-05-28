@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 
+import { parseExperiencesYaml, parseSummariesYaml } from './ai-yaml'
 import { openDatabase, runMigrations } from './db'
 import { getAppPaths } from './paths'
 import { renameProject, resolveProject } from './projects'
@@ -26,6 +27,12 @@ Usage:
 
 function resolveCliPath(cwd: string, targetPath: string): string {
   return isAbsolute(targetPath) ? targetPath : resolve(cwd, targetPath)
+}
+
+function readFlag(args: string[], name: string): string | null {
+  const index = args.indexOf(name)
+  if (index === -1) return null
+  return args[index + 1] ?? null
 }
 
 export async function runCli(args: string[], runtime: CliRuntime): Promise<number> {
@@ -110,6 +117,38 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       return 1
     } finally {
       db.close()
+    }
+  }
+
+  if (args[0] === 'summarize' && args[1] === 'apply') {
+    const file = readFlag(args, '--file')
+    if (!file) {
+      runtime.stderr('Usage: llm-iwiki summarize apply --project <path> --file <summaries.yaml>')
+      return 1
+    }
+    try {
+      const parsed = parseSummariesYaml(readFileSync(file, 'utf8'))
+      runtime.stdout(`validated summaries: ${parsed.summaries.length}`)
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    }
+  }
+
+  if (args[0] === 'experiences' && args[1] === 'propose') {
+    const file = readFlag(args, '--file')
+    if (!file) {
+      runtime.stderr('Usage: llm-iwiki experiences propose --project <path> --file <experiences.yaml>')
+      return 1
+    }
+    try {
+      const parsed = parseExperiencesYaml(readFileSync(file, 'utf8'))
+      runtime.stdout(`validated experiences: ${parsed.experiences.length}`)
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
     }
   }
 
