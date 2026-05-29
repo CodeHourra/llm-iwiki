@@ -177,14 +177,14 @@ interface SummaryRow {
   updated_at: string | null
 }
 
-interface CandidateRow {
+interface ExperienceRow {
   id: string
-  proposed_title: string
-  proposed_slug: string
-  proposed_body_markdown: string
-  source_sessions_json: string
+  title: string
+  slug: string
+  body_markdown: string
   confidence: string | null
-  created_at: string
+  status: string
+  updated_at: string
 }
 
 export function exportProject(
@@ -234,37 +234,37 @@ export function exportProject(
     track(writeNote(db, vault, spec, options, now), relPath)
   }
 
-  const candidates = db
-    .query<CandidateRow, [string]>(`
-      SELECT id, proposed_title, proposed_slug, proposed_body_markdown, source_sessions_json, confidence, created_at
-      FROM experience_candidates WHERE project_id = ? ORDER BY created_at DESC
+  const experiences = db
+    .query<ExperienceRow, [string]>(`
+      SELECT id, title, slug, body_markdown, confidence, status, updated_at
+      FROM experiences WHERE project_id = ? AND status = 'accepted' ORDER BY updated_at DESC
     `)
     .all(project.id)
 
-  for (const candidate of candidates) {
-    const relPath = join(baseRel, 'Experiences', `${sanitizeFileName(candidate.proposed_slug || candidate.proposed_title)}.md`)
-    let sourceSessions: string[] = []
-    try {
-      sourceSessions = JSON.parse(candidate.source_sessions_json) as string[]
-    } catch {
-      sourceSessions = []
-    }
+  for (const experience of experiences) {
+    const relPath = join(baseRel, 'Experiences', `${sanitizeFileName(experience.slug || experience.title)}.md`)
+    const sourceSessions = db
+      .query<{ session_id: string }, [string]>(
+        'SELECT session_id FROM session_experience_links WHERE experience_id = ?',
+      )
+      .all(experience.id)
+      .map((row) => row.session_id)
     const spec: NoteSpec = {
       noteType: 'experience',
-      entityId: candidate.id,
+      entityId: experience.id,
       relPath,
-      title: candidate.proposed_title,
-      managedBody: candidate.proposed_body_markdown,
+      title: experience.title,
+      managedBody: experience.body_markdown,
       frontmatter: {
         type: 'experience',
-        aiwiki_id: candidate.id,
+        aiwiki_id: experience.id,
         aiwiki_project_id: project.id,
         project: displayName,
-        slug: candidate.proposed_slug,
-        confidence: candidate.confidence,
-        status: 'proposed',
+        slug: experience.slug,
+        confidence: experience.confidence,
+        status: experience.status,
         source_sessions: sourceSessions,
-        updated_at: candidate.created_at,
+        updated_at: experience.updated_at,
       },
     }
     track(writeNote(db, vault, spec, options, now), relPath)
@@ -275,7 +275,7 @@ export function exportProject(
     `- canonical: \`${project.canonicalName}\``,
     project.canonicalRepoUrl ? `- repo: ${project.canonicalRepoUrl}` : null,
     `- session summaries: ${summaries.length}`,
-    `- experience candidates: ${candidates.length}`,
+    `- experiences: ${experiences.length}`,
   ]
     .filter((line): line is string => line != null)
     .join('\n')
@@ -296,4 +296,50 @@ export function exportProject(
   track(writeNote(db, vault, indexSpec, options, now), indexRel)
 
   return report
+}
+
+export type CheckStatus = 'clean' | 'drift' | 'missing' | 'no_managed_block'
+
+export interface CheckEntry {
+  noteType: string
+  entityId: string
+  filePath: string
+  status: CheckStatus
+}
+
+export interface CheckReport {
+  total: number
+  clean: number
+  entries: CheckEntry[]
+}
+
+export function checkVault(db: LlmIwikiDatabase): CheckReport {
+  const rows = db
+    .query<{ note_type: string; entity_id: string; file_path: string; managed_hash: string | null }, []>(
+      'SELECT note_type, entity_id, file_path, managed_hash FROM obsidian_notes ORDER BY file_path ASC',
+    )
+    .all()
+
+  const entries: CheckEntry[] = []
+  let clean = 0
+
+  for (const row of rows) {
+    let status: CheckStatus
+    if (!existsSync(row.file_path)) {
+      status = 'missing'
+    } else {
+      const split = splitManaged(readFileSync(row.file_path, 'utf8'))
+      if (!split) {
+        status = 'no_managed_block'
+      } else if (row.managed_hash && hash(split.managed) === row.managed_hash) {
+        status = 'clean'
+      } else {
+        status = 'drift'
+      }
+    }
+    if (status === 'clean') clean += 1
+    else entries.push({ noteType: row.note_type, entityId: row.entity_id, filePath: row.file_path, status })
+  }
+
+  return { total: rows.length, clean, entries }
 }

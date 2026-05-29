@@ -112,6 +112,30 @@ export function runMigrations(db: LlmIwikiDatabase): void {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS experiences (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      title TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      problem_type TEXT,
+      solution_type TEXT,
+      tech_stack_json TEXT,
+      summary TEXT,
+      body_markdown TEXT NOT NULL,
+      confidence TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(project_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS session_experience_links (
+      session_id TEXT NOT NULL,
+      experience_id TEXT NOT NULL,
+      relation TEXT NOT NULL,
+      PRIMARY KEY (session_id, experience_id)
+    );
+
     CREATE TABLE IF NOT EXISTS obsidian_notes (
       id TEXT PRIMARY KEY,
       note_type TEXT NOT NULL,

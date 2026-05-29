@@ -4,8 +4,15 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { parseExperiencesYaml, parseSummariesYaml } from './ai-yaml'
 import { readConfig, setConfigValue } from './config'
 import { openDatabase, runMigrations } from './db'
-import { type ExperienceScope, prepareExperiencesTask, proposeExperiences } from './experiences'
-import { exportProject } from './obsidian'
+import {
+  acceptExperience,
+  type ExperienceScope,
+  listCandidates,
+  prepareExperiencesTask,
+  proposeExperiences,
+  rejectExperience,
+} from './experiences'
+import { checkVault, exportProject } from './obsidian'
 import { getAppPaths, getProjectTaskDir } from './paths'
 import { getProject, listProjects, renameProject, resolveProject } from './projects'
 import { inspectProject } from './sessions'
@@ -34,7 +41,11 @@ Usage:
   llm-iwiki summarize apply --project <path> --file <summaries.yaml>
   llm-iwiki experiences prepare --project <path> [--from changed-summaries|all-recent] [--out <file>]
   llm-iwiki experiences propose --project <path> --file <experiences.yaml>
+  llm-iwiki experiences candidates [--project <path>]
+  llm-iwiki experiences accept <candidate-id>
+  llm-iwiki experiences reject <candidate-id>
   llm-iwiki obsidian export [--project <path>] [--vault <dir>] [--force]
+  llm-iwiki obsidian check
   llm-iwiki config show
   llm-iwiki config set <key> <value>
   llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
@@ -315,6 +326,58 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     }
   }
 
+  if (args[0] === 'experiences' && args[1] === 'candidates') {
+    const projectFlag = readFlag(args, '--project')
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const projectId = projectFlag ? resolveProject(db, resolveCliPath(runtime.cwd, projectFlag)).id : null
+      const candidates = listCandidates(db, projectId)
+      if (candidates.length === 0) {
+        runtime.stdout('No experience candidates. Run: llm-iwiki experiences propose')
+        return 0
+      }
+      for (const candidate of candidates) {
+        runtime.stdout(
+          `${candidate.id}  [${candidate.status}]  ${candidate.confidence ?? '-'}  ${candidate.proposed_title}`,
+        )
+      }
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'experiences' && (args[1] === 'accept' || args[1] === 'reject')) {
+    const candidateId = args[2]
+    if (!candidateId) {
+      runtime.stderr(`Usage: llm-iwiki experiences ${args[1]} <candidate-id>`)
+      return 1
+    }
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      if (args[1] === 'accept') {
+        const result = acceptExperience(db, candidateId)
+        runtime.stdout(`accepted: ${result.experienceId} (${result.slug}), linked sessions: ${result.linkedSessions}`)
+      } else {
+        rejectExperience(db, candidateId)
+        runtime.stdout(`rejected: ${candidateId}`)
+      }
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
   if (args[0] === 'config' && args[1] === 'show') {
     const paths = getAppPaths(runtime.homeDir)
     const config = readConfig(paths.configFile)
@@ -373,6 +436,22 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     } catch (error) {
       runtime.stderr(error instanceof Error ? error.message : String(error))
       return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'obsidian' && args[1] === 'check') {
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const report = checkVault(db)
+      runtime.stdout(`notes: ${report.total}, clean: ${report.clean}, needs attention: ${report.entries.length}`)
+      for (const entry of report.entries) {
+        runtime.stdout(`  ${entry.status}: ${entry.filePath}`)
+      }
+      return 0
     } finally {
       db.close()
     }

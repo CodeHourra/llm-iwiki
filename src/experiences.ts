@@ -125,3 +125,111 @@ export function proposeExperiences(db: LlmIwikiDatabase, parsed: ParsedExperienc
 
   return { written }
 }
+
+export interface CandidateRow {
+  id: string
+  project_id: string
+  proposed_title: string
+  proposed_slug: string
+  confidence: string | null
+  status: string
+  source_sessions_json: string
+  created_at: string
+}
+
+export function listCandidates(db: LlmIwikiDatabase, projectId: string | null): CandidateRow[] {
+  if (projectId) {
+    return db
+      .query<CandidateRow, [string]>(
+        'SELECT id, project_id, proposed_title, proposed_slug, confidence, status, source_sessions_json, created_at FROM experience_candidates WHERE project_id = ? ORDER BY created_at DESC',
+      )
+      .all(projectId)
+  }
+  return db
+    .query<CandidateRow, []>(
+      'SELECT id, project_id, proposed_title, proposed_slug, confidence, status, source_sessions_json, created_at FROM experience_candidates ORDER BY created_at DESC',
+    )
+    .all()
+}
+
+export interface AcceptExperienceResult {
+  experienceId: string
+  slug: string
+  linkedSessions: number
+}
+
+export function acceptExperience(db: LlmIwikiDatabase, candidateId: string): AcceptExperienceResult {
+  const candidate = db
+    .query<
+      {
+        project_id: string
+        proposed_title: string
+        proposed_slug: string
+        proposed_body_markdown: string
+        confidence: string | null
+        source_sessions_json: string
+      },
+      [string]
+    >(
+      'SELECT project_id, proposed_title, proposed_slug, proposed_body_markdown, confidence, source_sessions_json FROM experience_candidates WHERE id = ?',
+    )
+    .get(candidateId)
+
+  if (!candidate) throw new Error(`Experience candidate not found: ${candidateId}`)
+
+  let sourceSessions: string[] = []
+  try {
+    const parsed = JSON.parse(candidate.source_sessions_json) as unknown
+    if (Array.isArray(parsed)) sourceSessions = parsed.filter((value): value is string => typeof value === 'string')
+  } catch {
+    sourceSessions = []
+  }
+
+  const now = new Date().toISOString()
+  const experienceId = `exp_${hash(`${candidate.project_id}\u0000${candidate.proposed_slug}`)}`
+
+  const accept = db.transaction(() => {
+    db.query(`
+      INSERT INTO experiences (
+        id, project_id, title, slug, body_markdown, confidence, status, created_at, updated_at
+      ) VALUES ($id, $projectId, $title, $slug, $body, $confidence, 'accepted', $now, $now)
+      ON CONFLICT(project_id, slug) DO UPDATE SET
+        title = excluded.title,
+        body_markdown = excluded.body_markdown,
+        confidence = excluded.confidence,
+        status = 'accepted',
+        updated_at = excluded.updated_at
+    `).run({
+      $id: experienceId,
+      $projectId: candidate.project_id,
+      $title: candidate.proposed_title,
+      $slug: candidate.proposed_slug,
+      $body: candidate.proposed_body_markdown,
+      $confidence: candidate.confidence,
+      $now: now,
+    })
+
+    const resolved = db
+      .query<{ id: string }, [string, string]>('SELECT id FROM experiences WHERE project_id = ? AND slug = ?')
+      .get(candidate.project_id, candidate.proposed_slug)
+    const finalId = resolved?.id ?? experienceId
+
+    for (const sessionId of sourceSessions) {
+      db.query(`
+        INSERT INTO session_experience_links (session_id, experience_id, relation)
+        VALUES (?, ?, 'source')
+        ON CONFLICT(session_id, experience_id) DO NOTHING
+      `).run(sessionId, finalId)
+    }
+
+    db.query("UPDATE experience_candidates SET status = 'accepted' WHERE id = ?").run(candidateId)
+  })
+  accept()
+
+  return { experienceId, slug: candidate.proposed_slug, linkedSessions: sourceSessions.length }
+}
+
+export function rejectExperience(db: LlmIwikiDatabase, candidateId: string): void {
+  const changes = db.query("UPDATE experience_candidates SET status = 'rejected' WHERE id = ?").run(candidateId)
+  if (changes.changes === 0) throw new Error(`Experience candidate not found: ${candidateId}`)
+}
