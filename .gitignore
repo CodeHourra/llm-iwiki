@@ -36,3 +36,4 @@ node_modules/
 
 # XunJi runtime data
 .xunji/
+.npmrc
