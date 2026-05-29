@@ -36,6 +36,7 @@ bunx @codehourra/llm-iwiki doctor
 - Milestone 4（AI 协作总结）已完成：`summarize prepare` / `experiences prepare` 生成压缩后的 AI 任务，`summarize apply` / `experiences propose` 把外部 AI 产出的 YAML 落库到 `session_summaries` / `experience_candidates`。
 - Milestone 5（Obsidian 导出）已完成：`config set obsidian.vault <dir>` 配置库路径，`obsidian export` 将会话总结、已 accept 的经验和项目索引写成带 frontmatter + managed block 的 Markdown 笔记。更新采用非破坏式协议——保留用户手写区，托管块被手动改动时标记冲突并跳过，`--force` 才覆盖；`obsidian check` 只读扫描 vault 报告 drift/missing。
 - 经验生命周期：`experiences propose` 落库为候选（`experience_candidates`），`experiences candidates` 列出待审，`experiences accept/reject` 决定去留；accept 会把候选提升为正式 `experiences` 并建立 `session_experience_links`，再由 `obsidian export` 写出。
+- AI 助手集成：`skills init` 把 Claude Code / Codex / Cursor 使用的 skill 模板写入当前项目，驱动上述工作流。
 
 ```bash
 llm-iwiki sync                                          # 采集本地 AI 工具会话
@@ -50,7 +51,20 @@ llm-iwiki experiences accept <candidate-id>             # 采纳为正式经验
 llm-iwiki config set obsidian.vault ~/Obsidian/Vault    # 配置 Obsidian 库
 llm-iwiki obsidian export --project .                   # 导出为 Markdown 笔记
 llm-iwiki obsidian check                                # 检查笔记是否漂移
+llm-iwiki skills init                                   # 写入 AI 助手 skill 模板
 ```
+
+### `skills init`
+
+把 AI 编程助手使用的 skill 模板写入当前项目，让 Claude Code / Codex / Cursor 能按规范驱动上面的 `summarize` / `experiences` 工作流。
+
+```bash
+llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
+```
+
+- `--target`：只写入指定助手的模板；省略则写入全部三种。
+- `--force`：覆盖已存在的同名文件（默认跳过）。
+- `--dry-run`：只预演将写入/跳过的文件，不落盘。
 
 ## 待完成能力地图
 
