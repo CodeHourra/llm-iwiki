@@ -229,7 +229,7 @@ summaries:
   const exitCode = await runCli(['summarize', 'apply', '--project', '/tmp/project', '--file', summariesFile], runtime)
 
   expect(exitCode).toBe(0)
-  expect(stdout).toEqual(['validated summaries: 1'])
+  expect(stdout).toEqual(['applied summaries: 0', 'skipped (unknown session): 1'])
   expect(stderr).toEqual([])
 })
 
@@ -254,7 +254,7 @@ summaries:
   const exitCode = await runCli(['summarize', 'apply', '--file', 'summaries.yaml'], runtime)
 
   expect(exitCode).toBe(0)
-  expect(stdout).toEqual(['validated summaries: 1'])
+  expect(stdout).toEqual(['applied summaries: 0', 'skipped (unknown session): 1'])
   expect(stderr).toEqual([])
 })
 
@@ -378,6 +378,6 @@ experiences:
   const exitCode = await runCli(['experiences', 'propose', '--project', '/tmp/project', '--file', experiencesFile], runtime)
 
   expect(exitCode).toBe(0)
-  expect(stdout).toEqual(['validated experiences: 1'])
+  expect(stdout).toEqual(['proposed experiences: 1'])
   expect(stderr).toEqual([])
 })

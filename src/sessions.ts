@@ -59,6 +59,47 @@ export function listSessionsByProject(db: LlmIwikiDatabase, projectId: string, l
     .map(mapRow)
 }
 
+export interface StoredMessage {
+  role: string
+  content: string
+}
+
+export function getSessionMessages(db: LlmIwikiDatabase, sessionId: string): StoredMessage[] {
+  return db
+    .query<{ role: string; content: string }, [string]>(
+      'SELECT role, content FROM messages WHERE session_id = ? ORDER BY seq_order ASC',
+    )
+    .all(sessionId)
+}
+
+export function getSession(db: LlmIwikiDatabase, sessionId: string): SessionRow | null {
+  const row = db
+    .query<Parameters<typeof mapRow>[0], [string]>(`
+      SELECT id, source_id, source_session_id, title, message_count, status, raw_project_path, updated_at, last_seen_at
+      FROM sessions
+      WHERE id = ?
+    `)
+    .get(sessionId)
+  return row ? mapRow(row) : null
+}
+
+export function listSessionsToSummarize(
+  db: LlmIwikiDatabase,
+  projectId: string,
+  scope: 'changed' | 'all',
+): SessionRow[] {
+  const statusClause = scope === 'changed' ? "AND status IN ('new', 'changed')" : ''
+  return db
+    .query<Parameters<typeof mapRow>[0], [string]>(`
+      SELECT id, source_id, source_session_id, title, message_count, status, raw_project_path, updated_at, last_seen_at
+      FROM sessions
+      WHERE project_id = ? ${statusClause}
+      ORDER BY COALESCE(updated_at, last_seen_at) DESC
+    `)
+    .all(projectId)
+    .map(mapRow)
+}
+
 export function inspectProject(db: LlmIwikiDatabase, projectId: string): ProjectInspection {
   const sources = db
     .query<{ source_id: string; session_count: number }, [string]>(`

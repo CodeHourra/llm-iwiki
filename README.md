@@ -8,11 +8,16 @@
 
 - Milestone 1（CLI 骨架与状态库）已完成：`init` / `doctor` / `projects resolve` / `projects rename`。
 - Milestone 2（Collectors）基本完成：已实现 **Claude Code / Codex / Cursor / Gemini / CodeBuddy** 五个 collector 与 `sync`，可把本地会话按项目归一化入库，并通过 `projects list` / `projects inspect` 按项目维度跨工具聚合查看。
+- Milestone 4（AI 协作总结）进行中：`summarize prepare` / `experiences prepare` 生成压缩后的 AI 任务，`summarize apply` / `experiences propose` 把外部 AI 产出的 YAML 落库到 `session_summaries` / `experience_candidates`。
 
 ```bash
-llm-iwiki sync                 # 采集本地 AI 工具会话
-llm-iwiki projects list        # 按项目查看会话数
-llm-iwiki projects inspect .   # 查看某项目下各工具的会话
+llm-iwiki sync                                          # 采集本地 AI 工具会话
+llm-iwiki projects list                                 # 按项目查看会话数
+llm-iwiki projects inspect .                            # 查看某项目下各工具的会话
+llm-iwiki summarize prepare changed --project .         # 生成会话总结任务
+llm-iwiki summarize apply --project . --file summaries.yaml
+llm-iwiki experiences prepare --project . --from changed-summaries
+llm-iwiki experiences propose --project . --file experiences.yaml
 ```
 
 XunJi 桌面应用代码仅作为参考资料保存在 `refer/xunji/`，不参与本项目的构建、测试或发布。

@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 import { parseExperiencesYaml, parseSummariesYaml } from './ai-yaml'
 import { openDatabase, runMigrations } from './db'
-import { getAppPaths } from './paths'
+import { type ExperienceScope, prepareExperiencesTask, proposeExperiences } from './experiences'
+import { getAppPaths, getProjectTaskDir } from './paths'
 import { getProject, listProjects, renameProject, resolveProject } from './projects'
 import { inspectProject } from './sessions'
 import { initSkills, SKILL_TARGETS, type SkillTarget } from './skills'
+import { applySummaries, prepareSummariesTask } from './summarize'
 import { runSync } from './sync'
 
 export interface CliRuntime {
@@ -26,7 +28,9 @@ Usage:
   llm-iwiki projects resolve <path>
   llm-iwiki projects inspect <path-or-project-id>
   llm-iwiki projects rename <path-or-project-id> <display-name>
+  llm-iwiki summarize prepare [changed|all] --project <path> [--out <file>]
   llm-iwiki summarize apply --project <path> --file <summaries.yaml>
+  llm-iwiki experiences prepare --project <path> [--from changed-summaries|all-recent] [--out <file>]
   llm-iwiki experiences propose --project <path> --file <experiences.yaml>
   llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 `
@@ -207,19 +211,80 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     }
   }
 
+  if (args[0] === 'summarize' && args[1] === 'prepare') {
+    const scopeArg = args[2] && !args[2].startsWith('--') ? args[2] : 'changed'
+    if (scopeArg !== 'changed' && scopeArg !== 'all') {
+      runtime.stderr('Usage: llm-iwiki summarize prepare [changed|all] --project <path> [--out <file>]')
+      return 1
+    }
+    const projectPath = resolveCliPath(runtime.cwd, readFlag(args, '--project') ?? runtime.cwd)
+    const outFile = readFlag(args, '--out') ?? join(getProjectTaskDir(projectPath), 'summaries-task.md')
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = resolveProject(db, projectPath)
+      const result = prepareSummariesTask(db, project.id, scopeArg)
+      mkdirSync(dirname(resolveCliPath(runtime.cwd, outFile)), { recursive: true })
+      writeFileSync(resolveCliPath(runtime.cwd, outFile), result.markdown)
+      runtime.stdout(`prepared summaries task: ${result.sessionCount} sessions -> ${outFile}`)
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
   if (args[0] === 'summarize' && args[1] === 'apply') {
     const file = readFlag(args, '--file')
     if (!file) {
       runtime.stderr('Usage: llm-iwiki summarize apply --project <path> --file <summaries.yaml>')
       return 1
     }
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
     try {
+      runMigrations(db)
       const parsed = parseSummariesYaml(readFileSync(resolveCliPath(runtime.cwd, file), 'utf8'))
-      runtime.stdout(`validated summaries: ${parsed.summaries.length}`)
+      const result = applySummaries(db, parsed)
+      runtime.stdout(`applied summaries: ${result.written}`)
+      if (result.skipped.length > 0) {
+        runtime.stdout(`skipped (unknown session): ${result.skipped.length}`)
+      }
       return 0
     } catch (error) {
       runtime.stderr(error instanceof Error ? error.message : String(error))
       return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'experiences' && args[1] === 'prepare') {
+    const fromArg = (readFlag(args, '--from') ?? 'changed-summaries') as ExperienceScope
+    if (fromArg !== 'changed-summaries' && fromArg !== 'all-recent') {
+      runtime.stderr('Invalid --from. Use changed-summaries or all-recent.')
+      return 1
+    }
+    const projectPath = resolveCliPath(runtime.cwd, readFlag(args, '--project') ?? runtime.cwd)
+    const outFile = readFlag(args, '--out') ?? join(getProjectTaskDir(projectPath), 'experiences-task.md')
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = resolveProject(db, projectPath)
+      const result = prepareExperiencesTask(db, project.id, fromArg)
+      mkdirSync(dirname(resolveCliPath(runtime.cwd, outFile)), { recursive: true })
+      writeFileSync(resolveCliPath(runtime.cwd, outFile), result.markdown)
+      runtime.stdout(`prepared experiences task: ${result.summaryCount} summaries -> ${outFile}`)
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    } finally {
+      db.close()
     }
   }
 
@@ -229,13 +294,19 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       runtime.stderr('Usage: llm-iwiki experiences propose --project <path> --file <experiences.yaml>')
       return 1
     }
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
     try {
+      runMigrations(db)
       const parsed = parseExperiencesYaml(readFileSync(resolveCliPath(runtime.cwd, file), 'utf8'))
-      runtime.stdout(`validated experiences: ${parsed.experiences.length}`)
+      const result = proposeExperiences(db, parsed)
+      runtime.stdout(`proposed experiences: ${result.written}`)
       return 0
     } catch (error) {
       runtime.stderr(error instanceof Error ? error.message : String(error))
       return 1
+    } finally {
+      db.close()
     }
   }
 
