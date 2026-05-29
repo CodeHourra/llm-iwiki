@@ -1,63 +1,10 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
 import type { Collector, RawMessage, RawSession } from './types'
+import { deriveTitle, isEphemeralPath, normalizeContentParts } from './util'
 
 const PROJECT_ROOTS = ['.claude/projects', '.claude-internal/projects']
-
-const TITLE_MAX_LENGTH = 120
-
-const EPHEMERAL_PREFIXES = ['/tmp/', '/private/tmp/', '/var/folders/', '/private/var/folders/']
-
-function isEphemeralPath(path: string | null): boolean {
-  if (!path) return false
-  const temp = tmpdir()
-  if (path === temp) return true
-  const normalized = path.endsWith('/') ? path : `${path}/`
-  const prefixes = [...EPHEMERAL_PREFIXES, `${temp}/`]
-  return prefixes.some((prefix) => normalized.startsWith(prefix))
-}
-
-function normalizeContent(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (typeof part === 'string') return part
-        if (part && typeof part === 'object') {
-          const record = part as Record<string, unknown>
-          if (typeof record.text === 'string') return record.text
-          return JSON.stringify(record)
-        }
-        return String(part)
-      })
-      .join('\n')
-      .trim()
-  }
-  if (content == null) return ''
-  return JSON.stringify(content)
-}
-
-function firstMeaningfulLine(content: string): string | null {
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim()
-    if (trimmed === '' || /^[-=*#>`~]+$/.test(trimmed)) continue
-    return trimmed
-  }
-  return null
-}
-
-function deriveTitle(messages: RawMessage[]): string | null {
-  for (const message of messages) {
-    if (message.role !== 'user') continue
-    const line = firstMeaningfulLine(message.content)
-    if (line) {
-      return line.length > TITLE_MAX_LENGTH ? `${line.slice(0, TITLE_MAX_LENGTH)}…` : line
-    }
-  }
-  return null
-}
 
 function parseSessionFile(filePath: string): RawSession | null {
   const raw = readFileSync(filePath, 'utf8')
@@ -93,7 +40,7 @@ function parseSessionFile(filePath: string): RawSession | null {
     if (!message || typeof message !== 'object') continue
     const messageRecord = message as Record<string, unknown>
     const role = typeof messageRecord.role === 'string' ? messageRecord.role : type
-    const content = normalizeContent(messageRecord.content)
+    const content = normalizeContentParts(messageRecord.content)
     if (content.trim() === '') continue
 
     messages.push({
