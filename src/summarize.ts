@@ -1,5 +1,6 @@
 import type { ParsedSummariesYaml } from './types'
 import type { LlmIwikiDatabase } from './db'
+import { stableHash } from './hash'
 import { compactTranscript } from './compaction'
 import { getSessionMessages, listSessionsToSummarize } from './sessions'
 
@@ -76,7 +77,7 @@ export interface ApplySummariesResult {
 }
 
 function hash(value: string): string {
-  return Bun.hash(value).toString(16)
+  return stableHash(value)
 }
 
 export function applySummaries(db: LlmIwikiDatabase, parsed: ParsedSummariesYaml): ApplySummariesResult {

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 
 import type { LlmIwikiDatabase } from './db'
+import { stableHash } from './hash'
 
 export interface ProjectRecord {
   id: string
@@ -56,7 +57,7 @@ function computeProjectIdentity(localPath: string): ProjectIdentity {
   const canonicalRepoUrl = remote ? canonicalizeRemoteUrl(remote) : null
   const canonicalName = canonicalRepoUrl ?? basename(gitRoot ?? localPath)
   const slug = slugifyProjectName(canonicalName)
-  const id = `proj_${Bun.hash(canonicalRepoUrl ?? gitRoot ?? localPath).toString(16)}`
+  const id = `proj_${stableHash(canonicalRepoUrl ?? gitRoot ?? localPath)}`
 
   return {
     id,

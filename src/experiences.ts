@@ -1,5 +1,6 @@
 import type { ParsedExperiencesYaml } from './types'
 import type { LlmIwikiDatabase } from './db'
+import { stableHash } from './hash'
 import { slugifyProjectName } from './projects'
 
 export type ExperienceScope = 'changed-summaries' | 'all-recent'
@@ -87,7 +88,7 @@ export interface ProposeExperiencesResult {
 }
 
 function hash(value: string): string {
-  return Bun.hash(value).toString(16)
+  return stableHash(value)
 }
 
 export function proposeExperiences(db: LlmIwikiDatabase, parsed: ParsedExperiencesYaml): ProposeExperiencesResult {

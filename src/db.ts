@@ -1,12 +1,103 @@
-import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
 
-export type LlmIwikiDatabase = Database
+const nodeRequire = createRequire(import.meta.url)
+const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== 'undefined'
+
+interface RawStatement {
+  get(...params: unknown[]): unknown
+  all(...params: unknown[]): unknown[]
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint }
+}
+
+interface RawDatabase {
+  prepare(sql: string): RawStatement
+  exec(sql: string): void
+  transaction<T extends (...args: never[]) => unknown>(fn: T): T
+  close(): void
+}
+
+interface RawDatabaseConstructor {
+  new (file: string, options?: { readonly?: boolean }): RawDatabase
+}
+
+function openRaw(file: string, readonly: boolean): RawDatabase {
+  const options = readonly ? { readonly: true } : undefined
+  if (isBun) {
+    // bun:sqlite is only resolvable under the Bun runtime; load via a dynamic
+    // specifier so node bundlers do not try to resolve it.
+    const specifier = 'bun:sqlite'
+    const { Database } = nodeRequire(specifier) as { Database: RawDatabaseConstructor }
+    return new Database(file, options)
+  }
+  const BetterSqlite = nodeRequire('better-sqlite3') as RawDatabaseConstructor
+  return new BetterSqlite(file, options)
+}
+
+function isNamedParams(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && !Buffer.isBuffer(value)
+}
+
+function normalizeParams(params: unknown[]): unknown[] {
+  if (params.length !== 1 || !isNamedParams(params[0])) return params
+  // bun:sqlite expects object keys with the `$`/`@`/`:` prefix; better-sqlite3
+  // expects the bare name. SQL placeholders use `$name` for both.
+  if (isBun) return params
+  const stripped: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(params[0])) {
+    stripped[key.replace(/^[$@:]/, '')] = value
+  }
+  return [stripped]
+}
+
+class Query<Row> {
+  constructor(private readonly statement: RawStatement) {}
+
+  get(...params: unknown[]): Row | null {
+    return (this.statement.get(...normalizeParams(params)) ?? null) as Row | null
+  }
+
+  all(...params: unknown[]): Row[] {
+    return this.statement.all(...normalizeParams(params)) as Row[]
+  }
+
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint } {
+    return this.statement.run(...normalizeParams(params))
+  }
+}
+
+export class LlmIwikiDatabase {
+  constructor(private readonly raw: RawDatabase) {}
+
+  query<Row = unknown, _Params = unknown>(sql: string): Query<Row> {
+    return new Query<Row>(this.raw.prepare(sql))
+  }
+
+  exec(sql: string): void {
+    this.raw.exec(sql)
+  }
+
+  transaction<Args extends unknown[], R>(fn: (...args: Args) => R): (...args: Args) => R {
+    return this.raw.transaction(fn as (...args: never[]) => unknown) as unknown as (...args: Args) => R
+  }
+
+  close(): void {
+    this.raw.close()
+  }
+}
 
 export function openDatabase(databaseFile: string): LlmIwikiDatabase {
   mkdirSync(dirname(databaseFile), { recursive: true })
-  return new Database(databaseFile)
+  return new LlmIwikiDatabase(openRaw(databaseFile, false))
+}
+
+export function openReadonlyDatabase(databaseFile: string): LlmIwikiDatabase | null {
+  try {
+    return new LlmIwikiDatabase(openRaw(databaseFile, true))
+  } catch {
+    return null
+  }
 }
 
 export function runMigrations(db: LlmIwikiDatabase): void {

@@ -1,4 +1,5 @@
 import type { LlmIwikiDatabase } from './db'
+import { stableHash } from './hash'
 import { resolveProjectByPath } from './projects'
 import { COLLECTORS, type Collector, type RawSession } from './collectors'
 
@@ -21,7 +22,7 @@ export interface SyncOptions {
 }
 
 function hash(value: string): string {
-  return Bun.hash(value).toString(16)
+  return stableHash(value)
 }
 
 function sessionPrimaryId(sourceId: string, session: RawSession): string {

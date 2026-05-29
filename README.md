@@ -6,27 +6,21 @@
 
 ## 安装
 
-> 运行时依赖 [Bun](https://bun.sh)（CLI 入口为 TypeScript，使用 `bun` shebang）。
+> 运行时只需 [Node.js](https://nodejs.org) ≥ 20（无需 Bun）。SQLite 通过原生模块 `better-sqlite3` 提供，`npm install` 时自动下载预编译二进制。
 
 ```bash
 # 全局安装
 npm install -g @codehourra/llm-iwiki
-# 或使用 bun
-bun add -g @codehourra/llm-iwiki
 
 llm-iwiki init      # 初始化配置与状态库
 llm-iwiki doctor    # 自检
 ```
 
-也可以免安装、用 `npx` / `bunx` 直接运行（CLI 入口为 TypeScript，需本机已安装 Bun）：
+也可以免安装、用 `npx` 直接运行：
 
 ```bash
-# 一次性运行（不全局安装）
 npx @codehourra/llm-iwiki init
 npx @codehourra/llm-iwiki sync
-
-# 或使用 bunx
-bunx @codehourra/llm-iwiki doctor
 ```
 
 ## 当前状态

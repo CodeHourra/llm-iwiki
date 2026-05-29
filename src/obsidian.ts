@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { stringify as stringifyYaml } from 'yaml'
 
 import type { LlmIwikiDatabase } from './db'
+import { stableHash } from './hash'
 import type { ProjectRecord } from './projects'
 
 const MANAGED_START = '<!-- aiwiki:managed:start -->'
@@ -33,7 +34,7 @@ export interface ExportReport {
 }
 
 function hash(value: string): string {
-  return Bun.hash(value).toString(16)
+  return stableHash(value)
 }
 
 function sanitizeFileName(name: string): string {

@@ -1,7 +1,7 @@
-import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { type LlmIwikiDatabase, openReadonlyDatabase } from '../db'
 import type { Collector, RawMessage, RawSession } from './types'
 import { clampTitle, deriveTitle, isEphemeralPath } from './util'
 
@@ -29,12 +29,8 @@ function folderUriToPath(uri: string): string | null {
   }
 }
 
-function openReadonly(path: string): Database | null {
-  try {
-    return new Database(path, { readonly: true })
-  } catch {
-    return null
-  }
+function openReadonly(path: string): LlmIwikiDatabase | null {
+  return openReadonlyDatabase(path)
 }
 
 function collectWorkspaceComposers(userDir: string): Map<string, ComposerMeta> {
@@ -87,7 +83,7 @@ function collectWorkspaceComposers(userDir: string): Map<string, ComposerMeta> {
 }
 
 function buildSession(
-  globalDb: Database,
+  globalDb: LlmIwikiDatabase,
   dbPath: string,
   composerId: string,
   meta: ComposerMeta,
