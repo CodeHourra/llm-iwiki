@@ -2,8 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 import { parseExperiencesYaml, parseSummariesYaml } from './ai-yaml'
+import { readConfig, setConfigValue } from './config'
 import { openDatabase, runMigrations } from './db'
 import { type ExperienceScope, prepareExperiencesTask, proposeExperiences } from './experiences'
+import { exportProject } from './obsidian'
 import { getAppPaths, getProjectTaskDir } from './paths'
 import { getProject, listProjects, renameProject, resolveProject } from './projects'
 import { inspectProject } from './sessions'
@@ -32,6 +34,9 @@ Usage:
   llm-iwiki summarize apply --project <path> --file <summaries.yaml>
   llm-iwiki experiences prepare --project <path> [--from changed-summaries|all-recent] [--out <file>]
   llm-iwiki experiences propose --project <path> --file <experiences.yaml>
+  llm-iwiki obsidian export [--project <path>] [--vault <dir>] [--force]
+  llm-iwiki config show
+  llm-iwiki config set <key> <value>
   llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 `
 
@@ -301,6 +306,69 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       const parsed = parseExperiencesYaml(readFileSync(resolveCliPath(runtime.cwd, file), 'utf8'))
       const result = proposeExperiences(db, parsed)
       runtime.stdout(`proposed experiences: ${result.written}`)
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'config' && args[1] === 'show') {
+    const paths = getAppPaths(runtime.homeDir)
+    const config = readConfig(paths.configFile)
+    runtime.stdout(`config: ${paths.configFile}`)
+    runtime.stdout(`obsidian.vault: ${config.obsidianVault ?? '(unset)'}`)
+    return 0
+  }
+
+  if (args[0] === 'config' && args[1] === 'set') {
+    const key = args[2]
+    const value = args[3]
+    if (!key || value === undefined) {
+      runtime.stderr('Usage: llm-iwiki config set <key> <value>')
+      return 1
+    }
+    const paths = getAppPaths(runtime.homeDir)
+    mkdirSync(paths.configDir, { recursive: true })
+    try {
+      const normalizedKey = setConfigValue(paths.configFile, key, value)
+      runtime.stdout(`set ${normalizedKey} = ${value}`)
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    }
+  }
+
+  if (args[0] === 'obsidian' && args[1] === 'export') {
+    const paths = getAppPaths(runtime.homeDir)
+    const vaultFlag = readFlag(args, '--vault')
+    const vault = vaultFlag
+      ? resolveCliPath(runtime.cwd, vaultFlag)
+      : readConfig(paths.configFile).obsidianVault
+    if (!vault) {
+      runtime.stderr('No Obsidian vault configured. Run: llm-iwiki config set obsidian.vault <dir>')
+      return 1
+    }
+    const projectPath = resolveCliPath(runtime.cwd, readFlag(args, '--project') ?? runtime.cwd)
+    const force = args.includes('--force')
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = resolveProject(db, projectPath)
+      const report = exportProject(db, vault, project, { force })
+      runtime.stdout(`vault: ${vault}`)
+      runtime.stdout(
+        `exported: created ${report.created}, updated ${report.updated}, forced ${report.forced}, conflicts ${report.conflicts.length}`,
+      )
+      for (const conflict of report.conflicts) {
+        runtime.stdout(`  conflict (skipped): ${conflict}`)
+      }
+      if (report.conflicts.length > 0 && !force) {
+        runtime.stdout('Re-run with --force to overwrite managed blocks of conflicting notes.')
+      }
       return 0
     } catch (error) {
       runtime.stderr(error instanceof Error ? error.message : String(error))
