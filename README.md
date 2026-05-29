@@ -4,6 +4,20 @@
 
 `llm-iwiki` 会采集 Claude Code、Cursor、Codex、CodeBuddy 等 AI 编程工具的本地会话记录，按项目归一化到 SQLite，再通过 AI 工具生成结构化 YAML 摘要和经验候选，最终导出到 Obsidian。
 
+## 安装
+
+> 运行时依赖 [Bun](https://bun.sh)（CLI 入口为 TypeScript，使用 `bun` shebang）。
+
+```bash
+# 全局安装
+npm install -g @codehourra/llm-iwiki
+# 或使用 bun
+bun add -g @codehourra/llm-iwiki
+
+llm-iwiki init      # 初始化配置与状态库
+llm-iwiki doctor    # 自检
+```
+
 ## 当前状态
 
 - Milestone 1（CLI 骨架与状态库）已完成：`init` / `doctor` / `projects resolve` / `projects rename`。
@@ -26,5 +40,21 @@ llm-iwiki config set obsidian.vault ~/Obsidian/Vault    # 配置 Obsidian 库
 llm-iwiki obsidian export --project .                   # 导出为 Markdown 笔记
 llm-iwiki obsidian check                                # 检查笔记是否漂移
 ```
+
+## 待完成能力地图
+
+以下为已在设计文档中规划、但尚未实现的进阶能力（按优先级粗排）：
+
+| 能力 | 命令 | 说明 | 状态 |
+| --- | --- | --- | --- |
+| 经验融合 | `experiences merge <candidate-id> <experience-id>` | 人工确认后把候选正文融合进已有经验，先生成 `merge-preview-*.md` 预览，确认后改写 managed block，合并 `source_sessions` / `evidence`，保留用户手写区 | 待开发 |
+| 项目目录迁移 | `obsidian move-project <project-id>` | `projects rename` 后按 `obsidian_notes` 映射与 frontmatter 中的 `aiwiki_project_id` 迁移 vault 目录，目标已存在时先做冲突检查 | 待开发 |
+| 结构化检索 | `search [sessions\|experiences] <query>` | SQLite FTS5 为主检索（projects / sessions / messages / summaries / experiences），可选 ripgrep 检索已导出 Markdown，`--index sqlite\|obsidian\|all` 切换 | 待开发 |
+| 打开笔记 | `obsidian open <note-id>` | 在 Obsidian 中直接打开对应笔记 | 待开发 |
+| 路径冲突批处理 | `obsidian export --overwrite-conflicts \| --skip-conflicts` | 目录迁移 / 导出时对路径冲突批量选择，跳过的标记 `conflict_status=path_conflict` 供 `obsidian check` 持续报告 | 待开发 |
+| 增量范围导出 | `obsidian export --changed \| --all` | 按变更范围而非单项目导出 | 待开发 |
+| 时间窗筛选 | `experiences prepare --since 30d` | 经验提炼任务按时间窗口限定来源摘要 | 待开发 |
+
+## 备注
 
 XunJi 桌面应用代码仅作为参考资料保存在 `refer/xunji/`，不参与本项目的构建、测试或发布。
