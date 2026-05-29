@@ -1,12 +1,14 @@
 import { claudeCodeCollector } from './claude-code'
 import { codebuddyCollector } from './codebuddy'
 import { codexCollector } from './codex'
+import { cursorCollector } from './cursor'
 import { geminiCollector } from './gemini'
 import type { Collector } from './types'
 
 export const COLLECTORS: Collector[] = [
   claudeCodeCollector,
   codexCollector,
+  cursorCollector,
   geminiCollector,
   codebuddyCollector,
 ]

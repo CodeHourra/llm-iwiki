@@ -7,7 +7,7 @@
 ## 当前状态
 
 - Milestone 1（CLI 骨架与状态库）已完成：`init` / `doctor` / `projects resolve` / `projects rename`。
-- Milestone 2（Collectors）进行中：已实现 Claude Code collector 与 `sync`，可把本地会话按项目归一化入库，并通过 `projects list` / `projects inspect` 按项目维度聚合查看。Codex / Cursor / CodeBuddy / Gemini collector 待补。
+- Milestone 2（Collectors）基本完成：已实现 **Claude Code / Codex / Cursor / Gemini / CodeBuddy** 五个 collector 与 `sync`，可把本地会话按项目归一化入库，并通过 `projects list` / `projects inspect` 按项目维度跨工具聚合查看。
 
 ```bash
 llm-iwiki sync                 # 采集本地 AI 工具会话
