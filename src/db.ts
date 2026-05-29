@@ -44,6 +44,50 @@ export function runMigrations(db: LlmIwikiDatabase): void {
       alias_value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sources (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      enabled INTEGER NOT NULL,
+      scan_paths TEXT,
+      config_json TEXT,
+      last_sync_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL,
+      source_session_id TEXT NOT NULL,
+      project_id TEXT,
+      checkout_id TEXT,
+      raw_project_path TEXT,
+      raw_path TEXT,
+      title TEXT,
+      message_count INTEGER NOT NULL,
+      content_hash TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT,
+      updated_at TEXT,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      UNIQUE(source_id, source_session_id, raw_path)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions (project_id);
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      timestamp TEXT,
+      tokens_in INTEGER DEFAULT 0,
+      tokens_out INTEGER DEFAULT 0,
+      seq_order INTEGER NOT NULL,
+      content_hash TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_messages_session ON messages (session_id);
+
     CREATE TABLE IF NOT EXISTS session_summaries (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,

@@ -4,8 +4,10 @@ import { isAbsolute, resolve } from 'node:path'
 import { parseExperiencesYaml, parseSummariesYaml } from './ai-yaml'
 import { openDatabase, runMigrations } from './db'
 import { getAppPaths } from './paths'
-import { renameProject, resolveProject } from './projects'
+import { getProject, listProjects, renameProject, resolveProject } from './projects'
+import { inspectProject } from './sessions'
 import { initSkills, SKILL_TARGETS, type SkillTarget } from './skills'
+import { runSync } from './sync'
 
 export interface CliRuntime {
   cwd: string
@@ -19,7 +21,10 @@ const HELP = `llm-iwiki
 Usage:
   llm-iwiki init
   llm-iwiki doctor
+  llm-iwiki sync [--project <path>]
+  llm-iwiki projects list
   llm-iwiki projects resolve <path>
+  llm-iwiki projects inspect <path-or-project-id>
   llm-iwiki projects rename <path-or-project-id> <display-name>
   llm-iwiki summarize apply --project <path> --file <summaries.yaml>
   llm-iwiki experiences propose --project <path> --file <experiences.yaml>
@@ -80,6 +85,85 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     runtime.stdout(`database: ${paths.databaseFile}`)
     runtime.stdout('status: ok')
     return 0
+  }
+
+  if (args[0] === 'sync') {
+    const projectFlag = readFlag(args, '--project')
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const report = runSync(db, {
+        homeDir: runtime.homeDir ?? paths.homeDir,
+        projectFilter: projectFlag ? resolveCliPath(runtime.cwd, projectFlag) : null,
+      })
+      if (report.bySource.length === 0) {
+        runtime.stdout('No collectors detected on this machine.')
+        return 0
+      }
+      for (const source of report.bySource) {
+        runtime.stdout(
+          `${source.source}: ${source.total} sessions (new ${source.new}, changed ${source.changed}, unchanged ${source.unchanged}, missing ${source.sourceMissing})`,
+        )
+      }
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'projects' && args[1] === 'list') {
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const projects = listProjects(db)
+      if (projects.length === 0) {
+        runtime.stdout('No projects yet. Run: llm-iwiki sync')
+        return 0
+      }
+      for (const project of projects) {
+        const name = project.displayName ?? project.canonicalName
+        runtime.stdout(`${project.id}  ${project.sessionCount} sessions  ${name}`)
+      }
+      return 0
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'projects' && args[1] === 'inspect') {
+    const target = args[2]
+    if (!target) {
+      runtime.stderr('Usage: llm-iwiki projects inspect <path-or-project-id>')
+      return 1
+    }
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = target.startsWith('proj_')
+        ? getProject(db, target)
+        : resolveProject(db, resolveCliPath(runtime.cwd, target))
+      const inspection = inspectProject(db, project.id)
+      runtime.stdout(`project: ${project.displayName ?? project.canonicalName}`)
+      runtime.stdout(`id: ${project.id}`)
+      if (project.canonicalRepoUrl) runtime.stdout(`repo: ${project.canonicalRepoUrl}`)
+      runtime.stdout(`sources: ${inspection.sources.map((s) => `${s.source}(${s.sessionCount})`).join(', ') || 'none'}`)
+      runtime.stdout(`sessions: ${inspection.sessions.length}`)
+      for (const session of inspection.sessions) {
+        runtime.stdout(`  [${session.sourceId}] ${session.title ?? session.sourceSessionId} (${session.messageCount} msgs, ${session.status})`)
+      }
+      return 0
+    } catch (error) {
+      runtime.stderr(error instanceof Error ? error.message : String(error))
+      return 1
+    } finally {
+      db.close()
+    }
   }
 
   if (args[0] === 'projects' && args[1] === 'resolve') {
