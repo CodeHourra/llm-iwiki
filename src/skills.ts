@@ -17,6 +17,18 @@ export interface InitSkillsResult {
   skipped: string[]
 }
 
+export const SKILLS_BASE_DIR = join('.agents', 'skills')
+
+export interface SkillTargetInfo {
+  id: SkillTarget
+  name: string
+}
+
+export interface SkillTemplateInfo {
+  directory: string
+  relPath: string
+}
+
 interface SkillTemplate {
   directory: string
   content: string
@@ -126,6 +138,17 @@ This skill is initialized for ${TARGET_NAMES[target]}.
 
 function isFileExistsError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'EEXIST'
+}
+
+export function listSkillTargets(): SkillTargetInfo[] {
+  return SKILL_TARGETS.map((id) => ({ id, name: TARGET_NAMES[id] }))
+}
+
+export function listSkillTemplates(): SkillTemplateInfo[] {
+  return SKILL_TEMPLATES.map((template) => ({
+    directory: template.directory,
+    relPath: join(SKILLS_BASE_DIR, template.directory, 'SKILL.md'),
+  }))
 }
 
 export function initSkills(options: InitSkillsOptions): InitSkillsResult {

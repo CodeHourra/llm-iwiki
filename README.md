@@ -59,9 +59,11 @@ llm-iwiki skills init                                   # 写入 AI 助手 skill
 把 AI 编程助手使用的 skill 模板写入当前项目，让 Claude Code / Codex / Cursor 能按规范驱动上面的 `summarize` / `experiences` 工作流。
 
 ```bash
+llm-iwiki skills                # 列出可用 target 与将写入的 skill（等同 skills list）
 llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 ```
 
+- 裸 `skills` / `skills list`：只读列出可用 target 和将写入 `.agents/skills/` 的 skill，不落盘。
 - `--target`：只写入指定助手的模板；省略则写入全部三种。
 - `--force`：覆盖已存在的同名文件（默认跳过）。
 - `--dry-run`：只预演将写入/跳过的文件，不落盘。

@@ -271,6 +271,41 @@ test('skills init dry-run reports writes without creating files', async () => {
   expect(existsSync(join(projectDir, '.agents/skills/aiwiki-after-session/SKILL.md'))).toBe(false)
 })
 
+test('bare skills lists targets and templates without writing files', async () => {
+  const homeDir = join(tmpRoot, 'skills-list-home')
+  const projectDir = join(tmpRoot, 'skills-list-project')
+  const { runtime, stdout, stderr } = createRuntime(homeDir, projectDir)
+
+  const exitCode = await runCli(['skills'], runtime)
+
+  expect(exitCode).toBe(0)
+  expect(stderr).toEqual([])
+  const joined = stdout.join('\n')
+  expect(joined).toContain('可用 target:')
+  expect(joined).toContain('codex  (Codex)')
+  expect(joined).toContain('aiwiki-after-session')
+  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-after-session/SKILL.md'))).toBe(false)
+})
+
+test('skills list behaves the same as bare skills', async () => {
+  const { runtime, stdout } = createRuntime(join(tmpRoot, 'skills-list2-home'))
+
+  const exitCode = await runCli(['skills', 'list'], runtime)
+
+  expect(exitCode).toBe(0)
+  expect(stdout.join('\n')).toContain('将写入的 skill')
+})
+
+test('skills rejects unknown subcommand', async () => {
+  const { runtime, stdout, stderr } = createRuntime(join(tmpRoot, 'skills-unknown-home'))
+
+  const exitCode = await runCli(['skills', 'foo'], runtime)
+
+  expect(exitCode).toBe(1)
+  expect(stdout).toEqual([])
+  expect(stderr.join('\n')).toContain('Unknown skills subcommand: foo')
+})
+
 test('skills init rejects invalid target', async () => {
   const homeDir = join(tmpRoot, 'skills-invalid-target-home')
   const { runtime, stdout, stderr } = createRuntime(homeDir)

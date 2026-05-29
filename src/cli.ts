@@ -16,7 +16,14 @@ import { checkVault, exportProject } from './obsidian'
 import { getAppPaths, getProjectTaskDir } from './paths'
 import { getProject, listProjects, renameProject, resolveProject } from './projects'
 import { inspectProject } from './sessions'
-import { initSkills, SKILL_TARGETS, type SkillTarget } from './skills'
+import {
+  initSkills,
+  listSkillTargets,
+  listSkillTemplates,
+  SKILL_TARGETS,
+  SKILLS_BASE_DIR,
+  type SkillTarget,
+} from './skills'
 import { applySummaries, prepareSummariesTask } from './summarize'
 import { runSync } from './sync'
 
@@ -48,8 +55,13 @@ Usage:
   llm-iwiki obsidian check
   llm-iwiki config show
   llm-iwiki config set <key> <value>
+  llm-iwiki skills [list]
   llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 `
+
+const SKILLS_USAGE = `用法:
+  llm-iwiki skills list                                  # 列出可用 target 与将写入的 skill
+  llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]`
 
 function resolveCliPath(cwd: string, targetPath: string): string {
   return isAbsolute(targetPath) ? targetPath : resolve(cwd, targetPath)
@@ -477,6 +489,27 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     runtime.stdout(`skills written: ${result.written.length}`)
     runtime.stdout(`skills skipped: ${result.skipped.length}`)
     return 0
+  }
+
+  if (args[0] === 'skills' && (args[1] === undefined || args[1] === 'list')) {
+    runtime.stdout(SKILLS_USAGE)
+    runtime.stdout('')
+    runtime.stdout('可用 target:')
+    for (const target of listSkillTargets()) {
+      runtime.stdout(`  ${target.id}  (${target.name})`)
+    }
+    runtime.stdout('')
+    runtime.stdout(`将写入的 skill (位于 ${SKILLS_BASE_DIR}/):`)
+    for (const template of listSkillTemplates()) {
+      runtime.stdout(`  ${template.directory}  ->  ${template.relPath}`)
+    }
+    return 0
+  }
+
+  if (args[0] === 'skills') {
+    runtime.stderr(`Unknown skills subcommand: ${args[1]}`)
+    runtime.stderr(SKILLS_USAGE)
+    return 1
   }
 
   runtime.stderr(`Unknown command: ${args.join(' ')}`)
