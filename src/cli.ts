@@ -12,10 +12,19 @@ import {
   proposeExperiences,
   rejectExperience,
 } from './experiences'
-import { checkVault, exportProject } from './obsidian'
+import { checkVault, exportAll, exportProject, moveProject, writeGlobalIndex } from './obsidian'
 import { getAppPaths, getProjectTaskDir } from './paths'
-import { getProject, listProjects, renameProject, resolveProject } from './projects'
-import { inspectProject } from './sessions'
+import {
+  dedupeProjects,
+  listProjects,
+  mergeProjects,
+  ProjectResolutionError,
+  renameProject,
+  resolveProject,
+  resolveProjectRef,
+} from './projects'
+import { search, type SearchKind } from './search'
+import { inspectProject, listSessionsByProject, readSessionTranscript } from './sessions'
 import {
   initSkills,
   listSkillTargets,
@@ -36,27 +45,38 @@ export interface CliRuntime {
 
 const HELP = `llm-iwiki
 
+提示：所有 --project 都接受「路径 / proj_xxx / 项目名或 slug」三种形式。
+
 Usage:
   llm-iwiki init
   llm-iwiki doctor
   llm-iwiki sync [--project <path>]
   llm-iwiki projects list
   llm-iwiki projects resolve <path>
-  llm-iwiki projects inspect <path-or-project-id>
-  llm-iwiki projects rename <path-or-project-id> <display-name>
-  llm-iwiki summarize prepare [changed|all] --project <path> [--out <file>]
-  llm-iwiki summarize apply --project <path> --file <summaries.yaml>
-  llm-iwiki experiences prepare --project <path> [--from changed-summaries|all-recent] [--out <file>]
-  llm-iwiki experiences propose --project <path> --file <experiences.yaml>
-  llm-iwiki experiences candidates [--project <path>]
+  llm-iwiki projects inspect <project>
+  llm-iwiki projects rename <project> <display-name>
+  llm-iwiki projects merge <from-project-id> <into-project-id>
+  llm-iwiki projects dedupe [--dry-run]
+  llm-iwiki sessions list [--project <project>]
+  llm-iwiki sessions read <session-id> [--full]
+  llm-iwiki summarize prepare [changed|all] --project <project> [--out <file>]
+  llm-iwiki summarize apply [--project <project>] --file <summaries.yaml>
+  llm-iwiki experiences prepare --project <project> [--from changed-summaries|all-recent] [--since 30d] [--out <file>]
+  llm-iwiki experiences propose [--project <project>] --file <experiences.yaml>
+  llm-iwiki experiences candidates [--project <project>]
   llm-iwiki experiences accept <candidate-id>
   llm-iwiki experiences reject <candidate-id>
-  llm-iwiki obsidian export [--project <path>] [--vault <dir>] [--force]
+  llm-iwiki search <sessions|experiences> <query> [--project <project>]
+  llm-iwiki obsidian export [--project <project>] [--all] [--vault <dir>] [--force]
+  llm-iwiki obsidian move-project <project> [--vault <dir>]
   llm-iwiki obsidian check
   llm-iwiki config show
   llm-iwiki config set <key> <value>
   llm-iwiki skills [list]
   llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
+
+Global flags:
+  --debug   出错时打印详细堆栈
 `
 
 const SKILLS_USAGE = `用法:
@@ -75,7 +95,47 @@ function readFlag(args: string[], name: string): string | null {
   return value
 }
 
+function reportError(error: unknown, runtime: CliRuntime, debug: boolean): void {
+  if (error instanceof ProjectResolutionError) {
+    runtime.stderr(`找不到唯一项目：${error.ref}`)
+    if (error.candidates.length === 0) {
+      runtime.stderr('可能原因：路径下尚无会话、或项目名写错。建议：')
+      runtime.stderr('  - 先运行 llm-iwiki sync 采集会话')
+      runtime.stderr('  - 用 llm-iwiki projects list 查看已有项目，再用 proj_xxx 精确指定')
+    } else {
+      runtime.stderr('存在多个候选（按会话数排序）：')
+      for (const candidate of error.candidates) {
+        const name = candidate.displayName ?? candidate.canonicalName
+        runtime.stderr(`  ${candidate.id}  ${candidate.sessionCount} sessions  ${name}`)
+      }
+      runtime.stderr('建议：用 --project <proj_xxx> 精确指定，或先 llm-iwiki projects dedupe 合并重复项目。')
+    }
+    if (debug && error.stack) runtime.stderr(error.stack)
+    return
+  }
+  runtime.stderr(error instanceof Error ? error.message : String(error))
+  if (debug && error instanceof Error && error.stack) runtime.stderr(error.stack)
+}
+
+/**
+ * 解析 --project（默认当前目录），接受 path / proj_id / name，不创建空项目。
+ */
+function resolveProjectFlag(db: Parameters<typeof resolveProjectRef>[0], args: string[], runtime: CliRuntime) {
+  const raw = readFlag(args, '--project') ?? runtime.cwd
+  return resolveProjectRef(db, raw, runtime.cwd)
+}
+
+function parseSinceToIso(value: string): string {
+  const match = value.match(/^(\d+)([dhw])$/)
+  if (!match) throw new Error(`Invalid --since: ${value}. Use forms like 30d, 12h, 2w.`)
+  const amount = Number(match[1])
+  const unitMs = match[2] === 'h' ? 3_600_000 : match[2] === 'w' ? 604_800_000 : 86_400_000
+  return new Date(Date.now() - amount * unitMs).toISOString()
+}
+
 export async function runCli(args: string[], runtime: CliRuntime): Promise<number> {
+  const debug = args.includes('--debug')
+
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     runtime.stdout(HELP)
     return 0
@@ -170,16 +230,14 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
   if (args[0] === 'projects' && args[1] === 'inspect') {
     const target = args[2]
     if (!target) {
-      runtime.stderr('Usage: llm-iwiki projects inspect <path-or-project-id>')
+      runtime.stderr('Usage: llm-iwiki projects inspect <project>')
       return 1
     }
     const paths = getAppPaths(runtime.homeDir)
     const db = openDatabase(paths.databaseFile)
     try {
       runMigrations(db)
-      const project = target.startsWith('proj_')
-        ? getProject(db, target)
-        : resolveProject(db, resolveCliPath(runtime.cwd, target))
+      const project = resolveProjectRef(db, target, runtime.cwd)
       const inspection = inspectProject(db, project.id)
       runtime.stdout(`project: ${project.displayName ?? project.canonicalName}`)
       runtime.stdout(`id: ${project.id}`)
@@ -187,11 +245,117 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       runtime.stdout(`sources: ${inspection.sources.map((s) => `${s.source}(${s.sessionCount})`).join(', ') || 'none'}`)
       runtime.stdout(`sessions: ${inspection.sessions.length}`)
       for (const session of inspection.sessions) {
-        runtime.stdout(`  [${session.sourceId}] ${session.title ?? session.sourceSessionId} (${session.messageCount} msgs, ${session.status})`)
+        runtime.stdout(`  ${session.id}  [${session.sourceId}] ${session.title ?? session.sourceSessionId} (${session.messageCount} msgs, ${session.status})`)
       }
       return 0
     } catch (error) {
-      runtime.stderr(error instanceof Error ? error.message : String(error))
+      reportError(error, runtime, debug)
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'projects' && args[1] === 'merge') {
+    const fromId = args[2]
+    const intoId = args[3]
+    if (!fromId || !intoId) {
+      runtime.stderr('Usage: llm-iwiki projects merge <from-project-id> <into-project-id>')
+      return 1
+    }
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const result = mergeProjects(db, fromId, intoId)
+      runtime.stdout(`merged ${result.fromId} -> ${result.intoId} (moved ${result.movedSessions} sessions)`)
+      return 0
+    } catch (error) {
+      reportError(error, runtime, debug)
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'projects' && args[1] === 'dedupe') {
+    const dryRun = args.includes('--dry-run')
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      if (dryRun) {
+        const projects = listProjects(db)
+        const groups = new Map<string, typeof projects>()
+        for (const project of projects) {
+          const key = project.canonicalRepoUrl ? `repo:${project.canonicalRepoUrl}` : `slug:${project.slug}`
+          groups.set(key, [...(groups.get(key) ?? []), project])
+        }
+        let dupGroups = 0
+        for (const [, group] of groups) {
+          if (group.length < 2) continue
+          dupGroups += 1
+          runtime.stdout(`would merge ${group.length} duplicates of ${group[0]!.canonicalName}`)
+        }
+        runtime.stdout(`dry-run: ${dupGroups} duplicate group(s)`)
+        return 0
+      }
+      const result = dedupeProjects(db)
+      runtime.stdout(`deduped: merged ${result.merges.length} duplicate project(s)`)
+      for (const merge of result.merges) {
+        runtime.stdout(`  ${merge.fromId} -> ${merge.intoId} (moved ${merge.movedSessions} sessions)`)
+      }
+      return 0
+    } catch (error) {
+      reportError(error, runtime, debug)
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'sessions' && args[1] === 'list') {
+    const projectFlag = readFlag(args, '--project')
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = projectFlag ? resolveProjectRef(db, projectFlag, runtime.cwd) : resolveProjectFlag(db, args, runtime)
+      const sessions = listSessionsByProject(db, project.id)
+      runtime.stdout(`project: ${project.displayName ?? project.canonicalName} (${project.id})`)
+      runtime.stdout(`sessions: ${sessions.length}`)
+      for (const session of sessions) {
+        runtime.stdout(`  ${session.id}  [${session.sourceId}] ${session.title ?? session.sourceSessionId} (${session.messageCount} msgs, ${session.status})`)
+      }
+      return 0
+    } catch (error) {
+      reportError(error, runtime, debug)
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'sessions' && args[1] === 'read') {
+    const sessionId = args[2]
+    if (!sessionId || sessionId.startsWith('--')) {
+      runtime.stderr('Usage: llm-iwiki sessions read <session-id> [--full]')
+      return 1
+    }
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const { session, transcript, messageCount } = readSessionTranscript(db, sessionId, {
+        full: args.includes('--full'),
+      })
+      runtime.stdout(`# ${session.title ?? session.sourceSessionId}`)
+      runtime.stdout(`session: ${session.id}  source: ${session.sourceId}  messages: ${messageCount}`)
+      runtime.stdout('')
+      runtime.stdout(transcript)
+      return 0
+    } catch (error) {
+      reportError(error, runtime, debug)
       return 1
     } finally {
       db.close()
@@ -245,20 +409,21 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       runtime.stderr('Usage: llm-iwiki summarize prepare [changed|all] --project <path> [--out <file>]')
       return 1
     }
-    const projectPath = resolveCliPath(runtime.cwd, readFlag(args, '--project') ?? runtime.cwd)
-    const outFile = readFlag(args, '--out') ?? join(getProjectTaskDir(projectPath), 'summaries-task.md')
+    const projectRef = readFlag(args, '--project') ?? runtime.cwd
+    const taskBase = projectRef.startsWith('proj_') ? runtime.cwd : resolveCliPath(runtime.cwd, projectRef)
+    const outFile = readFlag(args, '--out') ?? join(getProjectTaskDir(taskBase), 'summaries-task.md')
     const paths = getAppPaths(runtime.homeDir)
     const db = openDatabase(paths.databaseFile)
     try {
       runMigrations(db)
-      const project = resolveProject(db, projectPath)
+      const project = resolveProjectRef(db, projectRef, runtime.cwd)
       const result = prepareSummariesTask(db, project.id, scopeArg)
       mkdirSync(dirname(resolveCliPath(runtime.cwd, outFile)), { recursive: true })
       writeFileSync(resolveCliPath(runtime.cwd, outFile), result.markdown)
       runtime.stdout(`prepared summaries task: ${result.sessionCount} sessions -> ${outFile}`)
       return 0
     } catch (error) {
-      runtime.stderr(error instanceof Error ? error.message : String(error))
+      reportError(error, runtime, debug)
       return 1
     } finally {
       db.close()
@@ -296,20 +461,23 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       runtime.stderr('Invalid --from. Use changed-summaries or all-recent.')
       return 1
     }
-    const projectPath = resolveCliPath(runtime.cwd, readFlag(args, '--project') ?? runtime.cwd)
-    const outFile = readFlag(args, '--out') ?? join(getProjectTaskDir(projectPath), 'experiences-task.md')
+    const projectRef = readFlag(args, '--project') ?? runtime.cwd
+    const taskBase = projectRef.startsWith('proj_') ? runtime.cwd : resolveCliPath(runtime.cwd, projectRef)
+    const outFile = readFlag(args, '--out') ?? join(getProjectTaskDir(taskBase), 'experiences-task.md')
+    const sinceFlag = readFlag(args, '--since')
     const paths = getAppPaths(runtime.homeDir)
     const db = openDatabase(paths.databaseFile)
     try {
       runMigrations(db)
-      const project = resolveProject(db, projectPath)
-      const result = prepareExperiencesTask(db, project.id, fromArg)
+      const since = sinceFlag ? parseSinceToIso(sinceFlag) : null
+      const project = resolveProjectRef(db, projectRef, runtime.cwd)
+      const result = prepareExperiencesTask(db, project.id, fromArg, since)
       mkdirSync(dirname(resolveCliPath(runtime.cwd, outFile)), { recursive: true })
       writeFileSync(resolveCliPath(runtime.cwd, outFile), result.markdown)
       runtime.stdout(`prepared experiences task: ${result.summaryCount} summaries -> ${outFile}`)
       return 0
     } catch (error) {
-      runtime.stderr(error instanceof Error ? error.message : String(error))
+      reportError(error, runtime, debug)
       return 1
     } finally {
       db.close()
@@ -344,7 +512,7 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
     const db = openDatabase(paths.databaseFile)
     try {
       runMigrations(db)
-      const projectId = projectFlag ? resolveProject(db, resolveCliPath(runtime.cwd, projectFlag)).id : null
+      const projectId = projectFlag ? resolveProjectRef(db, projectFlag, runtime.cwd).id : null
       const candidates = listCandidates(db, projectId)
       if (candidates.length === 0) {
         runtime.stdout('No experience candidates. Run: llm-iwiki experiences propose')
@@ -357,7 +525,7 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       }
       return 0
     } catch (error) {
-      runtime.stderr(error instanceof Error ? error.message : String(error))
+      reportError(error, runtime, debug)
       return 1
     } finally {
       db.close()
@@ -427,13 +595,24 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       runtime.stderr('No Obsidian vault configured. Run: llm-iwiki config set obsidian.vault <dir>')
       return 1
     }
-    const projectPath = resolveCliPath(runtime.cwd, readFlag(args, '--project') ?? runtime.cwd)
+    const all = args.includes('--all')
+    const projectRef = readFlag(args, '--project') ?? runtime.cwd
     const force = args.includes('--force')
     const db = openDatabase(paths.databaseFile)
     try {
       runMigrations(db)
-      const project = resolveProject(db, projectPath)
-      const report = exportProject(db, vault, project, { force })
+      let report
+      if (all) {
+        report = exportAll(db, vault, { force })
+      } else {
+        const project = resolveProjectRef(db, projectRef, runtime.cwd)
+        report = exportProject(db, vault, project, { force })
+        const indexReport = writeGlobalIndex(db, vault, { force })
+        report.created += indexReport.created
+        report.updated += indexReport.updated
+        report.forced += indexReport.forced
+        report.conflicts.push(...indexReport.conflicts)
+      }
       runtime.stdout(`vault: ${vault}`)
       runtime.stdout(
         `exported: created ${report.created}, updated ${report.updated}, forced ${report.forced}, conflicts ${report.conflicts.length}`,
@@ -446,7 +625,68 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
       }
       return 0
     } catch (error) {
-      runtime.stderr(error instanceof Error ? error.message : String(error))
+      reportError(error, runtime, debug)
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'obsidian' && args[1] === 'move-project') {
+    const target = args[2]
+    if (!target || target.startsWith('--')) {
+      runtime.stderr('Usage: llm-iwiki obsidian move-project <project> [--vault <dir>]')
+      return 1
+    }
+    const paths = getAppPaths(runtime.homeDir)
+    const vaultFlag = readFlag(args, '--vault')
+    const vault = vaultFlag ? resolveCliPath(runtime.cwd, vaultFlag) : readConfig(paths.configFile).obsidianVault
+    if (!vault) {
+      runtime.stderr('No Obsidian vault configured. Run: llm-iwiki config set obsidian.vault <dir>')
+      return 1
+    }
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const project = resolveProjectRef(db, target, runtime.cwd)
+      const result = moveProject(db, vault, project)
+      if (result.moved === 0) {
+        runtime.stdout('nothing to move (already at target or no exported notes).')
+      } else {
+        runtime.stdout(`moved project notes to slug directory: ${project.slug}`)
+        for (const dir of result.fromDirs) runtime.stdout(`  from: ${dir}`)
+      }
+      return 0
+    } catch (error) {
+      reportError(error, runtime, debug)
+      return 1
+    } finally {
+      db.close()
+    }
+  }
+
+  if (args[0] === 'search') {
+    const kind = args[1]
+    const query = args[2]
+    if ((kind !== 'sessions' && kind !== 'experiences') || !query || query.startsWith('--')) {
+      runtime.stderr('Usage: llm-iwiki search <sessions|experiences> <query> [--project <project>]')
+      return 1
+    }
+    const projectFlag = readFlag(args, '--project')
+    const paths = getAppPaths(runtime.homeDir)
+    const db = openDatabase(paths.databaseFile)
+    try {
+      runMigrations(db)
+      const projectId = projectFlag ? resolveProjectRef(db, projectFlag, runtime.cwd).id : null
+      const hits = search(db, kind as SearchKind, query, projectId)
+      runtime.stdout(`matches: ${hits.length}`)
+      for (const hit of hits) {
+        runtime.stdout(`  ${hit.id}  ${hit.title}`)
+        runtime.stdout(`    ${hit.snippet}`)
+      }
+      return 0
+    } catch (error) {
+      reportError(error, runtime, debug)
       return 1
     } finally {
       db.close()

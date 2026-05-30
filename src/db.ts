@@ -100,6 +100,12 @@ export function openReadonlyDatabase(databaseFile: string): LlmIwikiDatabase | n
   }
 }
 
+function addColumnIfMissing(db: LlmIwikiDatabase, table: string, column: string, definition: string): void {
+  const columns = db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all()
+  if (columns.some((row) => row.name === column)) return
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+}
+
 export function runMigrations(db: LlmIwikiDatabase): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -240,4 +246,11 @@ export function runMigrations(db: LlmIwikiDatabase): void {
       UNIQUE(note_type, entity_id)
     );
   `)
+
+  // v0.3 增量列（幂等追加，旧库平滑升级）。
+  addColumnIfMissing(db, 'experience_candidates', 'proposed_summary', 'TEXT')
+  addColumnIfMissing(db, 'experience_candidates', 'tech_stack_json', 'TEXT')
+  addColumnIfMissing(db, 'experience_candidates', 'problem_type', 'TEXT')
+  addColumnIfMissing(db, 'experience_candidates', 'topic', 'TEXT')
+  addColumnIfMissing(db, 'experiences', 'topic', 'TEXT')
 }

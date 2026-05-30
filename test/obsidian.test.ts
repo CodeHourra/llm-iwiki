@@ -48,14 +48,14 @@ test('exportProject creates managed notes with frontmatter on first run', () => 
   expect(report.created).toBe(3)
   expect(report.conflicts).toHaveLength(0)
 
-  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'Demo App', 'Sessions', '构建失败排查.md')
+  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'demo-app', 'sessions', '构建失败排查.md')
   const content = readFileSync(summaryPath, 'utf8')
   expect(content).toContain('aiwiki_id: sum_1')
   expect(content).toContain('<!-- aiwiki:managed:start -->')
   expect(content).toContain('依赖版本不兼容导致构建失败。')
   expect(content).toContain('## 我的补充')
 
-  const expPath = join(vault, 'LLM-iWiki', 'Projects', 'Demo App', 'Experiences', 'lock-deps.md')
+  const expPath = join(vault, 'LLM-iWiki', 'Projects', 'demo-app', 'experiences', 'lock-deps.md')
   const expContent = readFileSync(expPath, 'utf8')
   expect(expContent).toContain('status: accepted')
   expect(expContent).toContain(`- ${SESSION}`)
@@ -69,7 +69,7 @@ test('proposed experiences are not exported until accepted', () => {
 test('re-export is idempotent and preserves user section', () => {
   acceptExperience(db, 'cand_1')
   exportProject(db, vault, project(), { force: false })
-  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'Demo App', 'Sessions', '构建失败排查.md')
+  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'demo-app', 'sessions', '构建失败排查.md')
   const edited = `${readFileSync(summaryPath, 'utf8')}我自己加的笔记内容\n`
   writeFileSync(summaryPath, edited)
 
@@ -83,7 +83,7 @@ test('re-export is idempotent and preserves user section', () => {
 
 test('editing managed block triggers conflict and is skipped without force', () => {
   exportProject(db, vault, project(), { force: false })
-  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'Demo App', 'Sessions', '构建失败排查.md')
+  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'demo-app', 'sessions', '构建失败排查.md')
   const tampered = readFileSync(summaryPath, 'utf8').replace('依赖版本不兼容导致构建失败。', '我手动改了托管内容')
   writeFileSync(summaryPath, tampered)
 
@@ -141,7 +141,7 @@ test('checkVault reports drift when managed block is edited', () => {
   expect(clean.clean).toBe(3)
   expect(clean.entries).toHaveLength(0)
 
-  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'Demo App', 'Sessions', '构建失败排查.md')
+  const summaryPath = join(vault, 'LLM-iWiki', 'Projects', 'demo-app', 'sessions', '构建失败排查.md')
   writeFileSync(summaryPath, readFileSync(summaryPath, 'utf8').replace('依赖版本不兼容导致构建失败。', '被改动'))
 
   const drifted = checkVault(db)
