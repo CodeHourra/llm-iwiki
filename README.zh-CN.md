@@ -2,6 +2,13 @@
 
 [English](./README.md)
 
+[![npm version](https://img.shields.io/npm/v/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
+[![npm downloads](https://img.shields.io/npm/dm/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
+[![Node.js](https://img.shields.io/node/v/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
+[![Release](https://github.com/CodeHourra/llm-iwiki/actions/workflows/release.yml/badge.svg)](https://github.com/CodeHourra/llm-iwiki/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-blue)](./CHANGELOG.md)
+
 把本地 AI 编程会话沉淀为可检索的 Obsidian 知识库。
 
 `llm-iwiki` 会采集 Claude Code、Cursor、Codex、Gemini 和 CodeBuddy 的本地会话记录，按项目归一化到 SQLite，生成适合 AI 助手处理的总结任务，保存经过确认的项目经验，并导出为可导航的 Obsidian Markdown 笔记。
@@ -129,6 +136,10 @@ bun run release
 ## 变更记录
 
 见 [CHANGELOG.md](./CHANGELOG.md)。
+
+## 路线图
+
+见 [docs/roadmap.zh-CN.md](./docs/roadmap.zh-CN.md)。
 
 ## 许可证
 

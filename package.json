@@ -30,6 +30,8 @@
     "dist",
     "README.md",
     "README.zh-CN.md",
+    "docs/roadmap.md",
+    "docs/roadmap.zh-CN.md",
     "LICENSE"
   ],
   "engines": {

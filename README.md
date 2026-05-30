@@ -2,6 +2,13 @@
 
 [简体中文](./README.zh-CN.md)
 
+[![npm version](https://img.shields.io/npm/v/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
+[![npm downloads](https://img.shields.io/npm/dm/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
+[![Node.js](https://img.shields.io/node/v/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
+[![Release](https://github.com/CodeHourra/llm-iwiki/actions/workflows/release.yml/badge.svg)](https://github.com/CodeHourra/llm-iwiki/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-blue)](./CHANGELOG.md)
+
 Turn local AI coding sessions into a searchable Obsidian knowledge base.
 
 `llm-iwiki` collects sessions from Claude Code, Cursor, Codex, Gemini, and CodeBuddy, normalizes them by project in SQLite, prepares AI-friendly summarization tasks, stores accepted project learnings, and exports navigable Markdown notes to Obsidian.
@@ -129,6 +136,10 @@ User-facing changes should include a `.changeset/*.md` file. GitHub Actions crea
 ## Changelog
 
 See [CHANGELOG.md](./CHANGELOG.md).
+
+## Roadmap
+
+See [docs/roadmap.md](./docs/roadmap.md).
 
 ## License
 
