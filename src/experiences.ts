@@ -25,10 +25,14 @@ const EXPERIENCES_FORMAT = `## 输出格式（务必遵守）
 
 输出文件规则：
 - 只能是 YAML 内容，不要写 Markdown 标题或说明文字，也不要用 \`\`\` 代码围栏把它包起来。
+- 必须基于下方摘要的真实内容归纳，禁止编造；信息不足时宁可少写。
 - 不要保留 \`<...>\` 占位符，全部替换成真实内容。
 - 一条经验可以聚合多个会话，按主题归纳，不要逐会话复述。
 - \`source_sessions\` 必须是字符串数组，填该经验来自哪些 session_id（与下方摘要块标题里的 id 一致）。
 - \`confidence\` 可选，只能取 low / medium / high 其中之一。
+- \`topic\` 可选，用于跨项目主题归类（如 ai-coding / backend / frontend / devops）。
+- \`tech_stack\` 可选，字符串数组，列出涉及的技术栈（如 [go, kratos, sqlite]）。
+- \`problem_type\` 可选，一句话问题类型（如 性能优化 / 登录态 / 构建）。
 
 按下面结构填真实内容（# 后是说明，可删）：
 
@@ -46,26 +50,37 @@ experiences:
     source_sessions:
       - cc_xxxxxxxx
     confidence: medium
+    topic: backend                 # 可选，跨项目主题
+    tech_stack: [go, kratos]       # 可选
+    problem_type: 登录态           # 可选
 \`\`\``
 
-function fetchSummaries(db: LlmIwikiDatabase, projectId: string, scope: ExperienceScope): SummaryRow[] {
+function fetchSummaries(
+  db: LlmIwikiDatabase,
+  projectId: string,
+  scope: ExperienceScope,
+  since: string | null,
+): SummaryRow[] {
   const valueClause = scope === 'changed-summaries' ? "AND value IN ('medium', 'high')" : ''
+  const sinceClause = since ? 'AND updated_at >= ?' : ''
+  const params: string[] = since ? [projectId, since] : [projectId]
   return db
-    .query<SummaryRow, [string]>(`
+    .query<SummaryRow, string[]>(`
       SELECT session_id, title, value, summary_markdown
       FROM session_summaries
-      WHERE project_id = ? ${valueClause}
+      WHERE project_id = ? ${valueClause} ${sinceClause}
       ORDER BY updated_at DESC
     `)
-    .all(projectId)
+    .all(...params)
 }
 
 export function prepareExperiencesTask(
   db: LlmIwikiDatabase,
   projectId: string,
   scope: ExperienceScope,
+  since: string | null = null,
 ): PrepareExperiencesResult {
-  const summaries = fetchSummaries(db, projectId, scope)
+  const summaries = fetchSummaries(db, projectId, scope, since)
 
   const blocks = summaries.map((summary) =>
     [`### ${summary.session_id} — ${summary.title}`, `- value: ${summary.value}`, '', summary.summary_markdown].join('\n'),
@@ -108,21 +123,33 @@ export function proposeExperiences(db: LlmIwikiDatabase, parsed: ParsedExperienc
 
       db.query(`
         INSERT INTO experience_candidates (
-          id, project_id, proposed_title, proposed_slug, proposed_body_markdown, source_sessions_json, confidence, status, created_at
-        ) VALUES ($id, $projectId, $title, $slug, $body, $sources, $confidence, 'proposed', $now)
+          id, project_id, proposed_title, proposed_slug, proposed_summary, proposed_body_markdown,
+          source_sessions_json, confidence, tech_stack_json, problem_type, topic, status, created_at
+        ) VALUES (
+          $id, $projectId, $title, $slug, $summary, $body,
+          $sources, $confidence, $techStack, $problemType, $topic, 'proposed', $now
+        )
         ON CONFLICT(id) DO UPDATE SET
           proposed_title = excluded.proposed_title,
+          proposed_summary = excluded.proposed_summary,
           proposed_body_markdown = excluded.proposed_body_markdown,
           source_sessions_json = excluded.source_sessions_json,
-          confidence = excluded.confidence
+          confidence = excluded.confidence,
+          tech_stack_json = excluded.tech_stack_json,
+          problem_type = excluded.problem_type,
+          topic = excluded.topic
       `).run({
         $id: id,
         $projectId: parsed.projectId,
         $title: experience.title,
         $slug: slug,
+        $summary: experience.summary,
         $body: experience.bodyMarkdown,
         $sources: JSON.stringify(experience.sourceSessions),
         $confidence: experience.confidence,
+        $techStack: experience.techStack.length > 0 ? JSON.stringify(experience.techStack) : null,
+        $problemType: experience.problemType,
+        $topic: experience.topic,
         $now: now,
       })
       written += 1
@@ -172,13 +199,17 @@ export function acceptExperience(db: LlmIwikiDatabase, candidateId: string): Acc
         project_id: string
         proposed_title: string
         proposed_slug: string
+        proposed_summary: string | null
         proposed_body_markdown: string
         confidence: string | null
+        tech_stack_json: string | null
+        problem_type: string | null
+        topic: string | null
         source_sessions_json: string
       },
       [string]
     >(
-      'SELECT project_id, proposed_title, proposed_slug, proposed_body_markdown, confidence, source_sessions_json FROM experience_candidates WHERE id = ?',
+      'SELECT project_id, proposed_title, proposed_slug, proposed_summary, proposed_body_markdown, confidence, tech_stack_json, problem_type, topic, source_sessions_json FROM experience_candidates WHERE id = ?',
     )
     .get(candidateId)
 
@@ -198,12 +229,16 @@ export function acceptExperience(db: LlmIwikiDatabase, candidateId: string): Acc
   const accept = db.transaction(() => {
     db.query(`
       INSERT INTO experiences (
-        id, project_id, title, slug, body_markdown, confidence, status, created_at, updated_at
-      ) VALUES ($id, $projectId, $title, $slug, $body, $confidence, 'accepted', $now, $now)
+        id, project_id, title, slug, summary, body_markdown, confidence, tech_stack_json, problem_type, topic, status, created_at, updated_at
+      ) VALUES ($id, $projectId, $title, $slug, $summary, $body, $confidence, $techStack, $problemType, $topic, 'accepted', $now, $now)
       ON CONFLICT(project_id, slug) DO UPDATE SET
         title = excluded.title,
+        summary = excluded.summary,
         body_markdown = excluded.body_markdown,
         confidence = excluded.confidence,
+        tech_stack_json = excluded.tech_stack_json,
+        problem_type = excluded.problem_type,
+        topic = excluded.topic,
         status = 'accepted',
         updated_at = excluded.updated_at
     `).run({
@@ -211,8 +246,12 @@ export function acceptExperience(db: LlmIwikiDatabase, candidateId: string): Acc
       $projectId: candidate.project_id,
       $title: candidate.proposed_title,
       $slug: candidate.proposed_slug,
+      $summary: candidate.proposed_summary,
       $body: candidate.proposed_body_markdown,
       $confidence: candidate.confidence,
+      $techStack: candidate.tech_stack_json,
+      $problemType: candidate.problem_type,
+      $topic: candidate.topic,
       $now: now,
     })
 

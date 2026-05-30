@@ -1,3 +1,4 @@
+import { compactTranscript } from './compaction'
 import type { LlmIwikiDatabase } from './db'
 
 export interface SessionRow {
@@ -70,6 +71,29 @@ export function getSessionMessages(db: LlmIwikiDatabase, sessionId: string): Sto
       'SELECT role, content FROM messages WHERE session_id = ? ORDER BY seq_order ASC',
     )
     .all(sessionId)
+}
+
+export interface SessionTranscript {
+  session: SessionRow
+  transcript: string
+  messageCount: number
+}
+
+/**
+ * 读取一个会话的真实正文（压缩后的可读 transcript），供人/AI 核对，避免凭空编造摘要。
+ */
+export function readSessionTranscript(
+  db: LlmIwikiDatabase,
+  sessionId: string,
+  options: { full?: boolean } = {},
+): SessionTranscript {
+  const session = getSession(db, sessionId)
+  if (!session) throw new Error(`Session not found: ${sessionId}`)
+  const messages = getSessionMessages(db, sessionId)
+  const transcript = options.full
+    ? compactTranscript(messages, { maxPerMessage: 1_000_000, maxMessages: 1_000_000 })
+    : compactTranscript(messages)
+  return { session, transcript, messageCount: messages.length }
 }
 
 export function getSession(db: LlmIwikiDatabase, sessionId: string): SessionRow | null {

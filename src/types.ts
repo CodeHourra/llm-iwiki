@@ -21,6 +21,9 @@ export interface ParsedExperiencesYaml {
     bodyMarkdown: string
     sourceSessions: string[]
     confidence: Confidence | null
+    topic: string | null
+    techStack: string[]
+    problemType: string | null
     metadata: Record<string, unknown>
   }>
 }
