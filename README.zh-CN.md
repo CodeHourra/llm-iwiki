@@ -1,6 +1,6 @@
 # llm-iwiki
 
-[简体中文](./README.zh-CN.md)
+[English](./README.md)
 
 [![npm version](https://img.shields.io/npm/v/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
 [![npm downloads](https://img.shields.io/npm/dm/@codehourra/llm-iwiki.svg)](https://www.npmjs.com/package/@codehourra/llm-iwiki)
@@ -9,40 +9,40 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-blue)](./CHANGELOG.md)
 
-Turn local AI coding sessions into a searchable Obsidian knowledge base.
+把本地 AI 编程会话沉淀为可检索的 Obsidian 知识库。
 
-`llm-iwiki` collects sessions from Claude Code, Cursor, Codex, Gemini, and CodeBuddy, normalizes them by project in SQLite, prepares AI-friendly summarization tasks, stores accepted project learnings, and exports navigable Markdown notes to Obsidian.
+`llm-iwiki` 会采集 Claude Code、Cursor、Codex、Gemini 和 CodeBuddy 的本地会话记录，按项目归一化到 SQLite，生成适合 AI 助手处理的总结任务，保存经过确认的项目经验，并导出为可导航的 Obsidian Markdown 笔记。
 
-## Features
+## 功能特性
 
-- Collect local AI coding sessions across multiple tools.
-- Resolve sessions by project, repository, path, or slug.
-- Generate summarization and experience-extraction task files for AI assistants.
-- Review and accept reusable engineering experiences before publishing them.
-- Export project summaries, session notes, and project-scoped experiences to Obsidian.
-- Preserve user-written note sections while updating managed content blocks.
-- Search session summaries and accepted experiences from the CLI.
+- 采集多个 AI 编程工具的本地会话记录。
+- 按项目、仓库、路径或 slug 解析和归类会话。
+- 为 AI 助手生成会话总结和经验提取任务文件。
+- 在发布到知识库前审核并采纳可复用的工程经验。
+- 导出项目摘要、会话笔记和项目经验到 Obsidian。
+- 更新托管内容块时保留用户手写区域。
+- 通过 CLI 检索会话摘要和已采纳经验。
 
-## Requirements
+## 环境要求
 
-- Node.js 20 or newer at runtime.
-- Bun for local development, testing, and building.
+- 运行时需要 Node.js 20 或更高版本。
+- 本地开发、测试和构建需要 Bun。
 
-SQLite is provided by `better-sqlite3`; prebuilt binaries are installed automatically by npm where available.
+SQLite 由 `better-sqlite3` 提供；npm 安装时会自动下载可用的预编译二进制。
 
-## Installation
+## 安装
 
 ```bash
 npm install -g @codehourra/llm-iwiki
 ```
 
-You can also run it without installing globally:
+也可以不全局安装，直接使用 `npx`：
 
 ```bash
 npx @codehourra/llm-iwiki --help
 ```
 
-## Quick Start
+## 快速开始
 
 ```bash
 llm-iwiki init
@@ -51,7 +51,7 @@ llm-iwiki projects list
 llm-iwiki projects inspect .
 ```
 
-Configure an Obsidian vault and export notes:
+配置 Obsidian 库并导出笔记：
 
 ```bash
 llm-iwiki config set obsidian.vault ~/Obsidian/Vault
@@ -64,9 +64,9 @@ llm-iwiki experiences accept <candidate-id>
 llm-iwiki obsidian export --project .
 ```
 
-The `prepare` commands generate task files for an AI assistant. Write the corresponding YAML files from those task files, then apply/propose them with the commands above.
+`prepare` 命令会生成供 AI 助手阅读的任务文件。根据任务文件编写对应 YAML 后，再用上面的 `apply` / `propose` 命令落库。
 
-## Common Commands
+## 常用命令
 
 ```bash
 llm-iwiki sync [--project <path>]
@@ -85,11 +85,11 @@ llm-iwiki obsidian export [--project <project>|--all]
 llm-iwiki obsidian check
 ```
 
-`<project>` can be a local path, a `proj_xxx` id, a display name, or a slug. If multiple projects match, use `projects list` to pick the exact project id.
+`<project>` 可以是本地路径、`proj_xxx` 项目 id、展示名或 slug。如果匹配到多个项目，请先用 `projects list` 找到准确的项目 id。
 
-## Obsidian Output
+## Obsidian 输出结构
 
-Exports are written under `LLM-iWiki/` in your configured vault:
+导出内容会写入已配置 vault 下的 `LLM-iWiki/` 目录：
 
 ```text
 LLM-iWiki/
@@ -102,19 +102,19 @@ LLM-iWiki/
 └── Topics/
 ```
 
-Generated notes use frontmatter plus an `aiwiki:managed` block. You can write your own notes outside the managed block; re-exporting preserves those sections unless `--force` is used.
+生成的笔记包含 frontmatter 和 `aiwiki:managed` 托管内容块。你可以在托管块之外自由补充内容；重新导出时会保留这些手写内容，除非显式使用 `--force`。
 
-## AI Assistant Skill
+## AI 助手 Skill
 
-Install the bundled `aiwiki-knowledge` skill into the current project:
+将内置的 `aiwiki-knowledge` skill 安装到当前项目：
 
 ```bash
 llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 ```
 
-The skill teaches compatible assistants how to run the `sync -> summarize -> experiences -> export` workflow and how to produce valid YAML for `summarize apply` and `experiences propose`.
+这个 skill 会教兼容的 AI 助手如何执行 `sync -> summarize -> experiences -> export` 流程，以及如何为 `summarize apply` 和 `experiences propose` 生成合法 YAML。
 
-## Development
+## 开发
 
 ```bash
 bun install
@@ -123,7 +123,7 @@ bun test
 bun run build
 ```
 
-This project uses Changesets for versioning, changelog generation, and npm publishing:
+项目使用 Changesets 管理版本号、变更记录和 npm 发布：
 
 ```bash
 bun run changeset
@@ -131,16 +131,16 @@ bun run version-packages
 bun run release
 ```
 
-User-facing changes should include a `.changeset/*.md` file. GitHub Actions creates the release PR and publishes to npm after the release PR is merged.
+面向用户的变更应包含一个 `.changeset/*.md` 文件。GitHub Actions 会创建发布 PR，并在发布 PR 合并后发布到 npm。
 
-## Changelog
+## 变更记录
 
-See [CHANGELOG.md](./CHANGELOG.md).
+见 [CHANGELOG.md](./CHANGELOG.md)。
 
-## Roadmap
+## 路线图
 
-See [docs/roadmap.md](./docs/roadmap.md).
+见 [docs/roadmap.zh-CN.md](./docs/roadmap.zh-CN.md)。
 
-## License
+## 许可证
 
 [MIT](./LICENSE)
