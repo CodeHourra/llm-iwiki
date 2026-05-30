@@ -42,86 +42,119 @@ const TARGET_NAMES: Record<SkillTarget, string> = {
 
 const SKILL_TEMPLATES: SkillTemplate[] = [
   {
-    directory: 'aiwiki-after-session',
+    directory: 'aiwiki-knowledge',
     content: `---
-name: aiwiki-after-session
-description: Capture session knowledge into llm-iwiki summaries, experiences, and Obsidian export after project work.
+name: aiwiki-knowledge
+description: 用 llm-iwiki 把当前项目跨 AI 工具的会话沉淀成知识库——采集会话、生成总结与经验、导出到 Obsidian。当用户提到"沉淀/总结这次工作""存进知识库""项目复盘""跑一下 llm-iwiki"或想把会话经验归档时使用。
 ---
 
-# AIWiki After Session
+# AIWiki 知识沉淀
 
-Use this skill after a meaningful coding or design session in the current project.
+用 \`llm-iwiki\` 把当前项目里跨 AI 工具（Claude Code / Cursor / Codex / CodeBuddy / Gemini）的会话，沉淀为「会话总结 → 可复用经验 → Obsidian 笔记」。
 
-## Steps
+## 何时使用
 
-1. Sync the current project:
+- 完成一段有价值的编码 / 设计工作后，想把过程沉淀进知识库。
+- 用户说「沉淀这次工作」「总结到知识库」「项目复盘」「跑一下 llm-iwiki」。
+
+## 整体流程
+
+\`采集(命令) → 生成总结任务(命令) → 你产出 summaries.yaml → 落库(命令) → 生成经验任务(命令) → 你产出 experiences.yaml → 落库为候选(命令) → 人工审核 → 导出 Obsidian(命令)\`
+
+其中**只有「产出两个 YAML」需要你来做**，其余都是直接跑命令。务必先读下方「YAML 输出规则」再动手，这是最容易出错的地方。
+
+## 步骤（在项目根目录执行）
+
+1. 采集并确认项目已识别，记下顶部的 project_id（形如 \`proj_xxxx\`）：
    \`\`\`bash
-   llm-iwiki sync --project .
+   llm-iwiki sync
+   llm-iwiki projects inspect .
    \`\`\`
-2. Prepare changed summaries:
+   若显示 \`sessions: 0\`，说明本机暂无该项目会话，停止并告知用户。
+
+2. 生成总结任务文件（想覆盖全部历史把 \`changed\` 换成 \`all\`）：
    \`\`\`bash
    llm-iwiki summarize prepare changed --project . --out .llm-iwiki/tasks/summaries-task.md
    \`\`\`
-3. Generate \`.llm-iwiki/tasks/summaries.yaml\` from the prepared task.
-4. Apply the summaries:
+
+3. 阅读 \`.llm-iwiki/tasks/summaries-task.md\`，据此**新建** \`.llm-iwiki/tasks/summaries.yaml\`（纯 YAML，见下方规则）。
+
+4. 落库；若报解析 / 校验错，按报错修正 YAML 后重跑：
    \`\`\`bash
    llm-iwiki summarize apply --project . --file .llm-iwiki/tasks/summaries.yaml
    \`\`\`
-5. Prepare experience proposals from changed summaries:
+
+5. 生成经验任务文件（只吃 value=medium/high 的总结）：
    \`\`\`bash
    llm-iwiki experiences prepare --project . --from changed-summaries --out .llm-iwiki/tasks/experiences-task.md
    \`\`\`
-6. Generate \`.llm-iwiki/tasks/experiences.yaml\` from the prepared task.
-7. Propose the experiences:
+
+6. 阅读 \`.llm-iwiki/tasks/experiences-task.md\`，据此**新建** \`.llm-iwiki/tasks/experiences.yaml\`（纯 YAML）。
+
+7. 落库为候选：
    \`\`\`bash
    llm-iwiki experiences propose --project . --file .llm-iwiki/tasks/experiences.yaml
    \`\`\`
-8. Export project knowledge to Obsidian:
+
+8. 列出候选交用户决定，**不要自行 accept**：
    \`\`\`bash
+   llm-iwiki experiences candidates --project .
+   # 用户确认后再：llm-iwiki experiences accept <candidate-id>
+   \`\`\`
+
+9. 导出到 Obsidian（只导出已 accept 的经验；库路径仅首次需配置）：
+   \`\`\`bash
+   llm-iwiki config set obsidian.vault <库目录>
    llm-iwiki obsidian export --project .
    \`\`\`
-`,
-  },
-  {
-    directory: 'aiwiki-before-debug',
-    content: `---
-name: aiwiki-before-debug
-description: Search project memory before debugging so related history is visible before changing code.
----
 
-# AIWiki Before Debug
+## YAML 输出规则（最重要，避免格式错误）
 
-Use this skill before investigating a bug, failure, error message, or confusing behavior.
+- \`*-task.md\` 是**输入说明**，绝不要修改它，更不要把它改名当成输出。
+- 输出文件（\`summaries.yaml\` / \`experiences.yaml\`）**只能包含 YAML**：
+  - 不要写 Markdown 标题或说明文字；
+  - 不要用 \`\`\` 代码围栏把整段内容包起来；
+  - 不要保留 \`<...>\` 占位符，全部换成真实内容。
+- \`project_id\` 用对应任务文件顶部给出的值。
+- summaries 每条：\`session_id\`（与任务文件里会话块标题的 id 完全一致）、\`title\`、\`value\`（只能是 none / low / medium / high 之一）、\`summary_markdown\`（用 \`|\` 块标量，正文缩进保持一致）。
+- experiences 每条：\`title\`、\`summary\`、\`body_markdown\`、\`source_sessions\`（字符串数组）必填；\`slug\`、\`confidence\`（low / medium / high）可选。
 
-## Steps
+### summaries.yaml 正确示例
 
-1. Search the full project knowledge index:
-   \`\`\`bash
-   llm-iwiki search "<error or topic>" --project . --index all
-   \`\`\`
-2. Read any related summaries, experiences, or prior decisions before editing code.
-3. Report whether related history was found, and name the most relevant item when it was found.
-`,
-  },
-  {
-    directory: 'aiwiki-project-retrospective',
-    content: `---
-name: aiwiki-project-retrospective
-description: Review recent project knowledge and extract retrospective themes from llm-iwiki.
----
+\`\`\`yaml
+project_id: proj_071be0c7a2e9ccc6
+summaries:
+  - session_id: cc_ab12cd34
+    title: 修复切换租户后登录态丢失
+    value: high
+    summary_markdown: |
+      ## 问题
+      切换租户后登录态丢失。
+      ## 关键决策
+      统一在中间件按租户刷新 token。
+      ## 结论
+      已修复并补了回归测试。
+\`\`\`
 
-# AIWiki Project Retrospective
+### experiences.yaml 正确示例
 
-Use this skill when preparing a project retrospective or looking for recent repeated lessons.
-
-## Steps
-
-1. Prepare a retrospective from recent project history:
-   \`\`\`bash
-   llm-iwiki experiences prepare --project . --from all-recent --since 30d --out .llm-iwiki/tasks/retrospective-task.md
-   \`\`\`
-2. Review the prepared task for repeated themes, unresolved questions, and process improvements.
-3. Capture any accepted learnings through the normal llm-iwiki experience proposal flow.
+\`\`\`yaml
+project_id: proj_071be0c7a2e9ccc6
+experiences:
+  - title: 多租户下的登录态刷新策略
+    summary: |
+      切换租户必须按租户维度刷新会话凭证。
+    body_markdown: |
+      ## 背景
+      多租户切换会丢登录态。
+      ## 方案
+      中间件按租户统一刷新 token。
+      ## 结论
+      回归通过，沉淀为团队规范。
+    source_sessions:
+      - cc_ab12cd34
+    confidence: medium
+\`\`\`
 `,
   },
 ]
@@ -130,9 +163,9 @@ function appendTargetGuidance(content: string, target: SkillTarget | null): stri
   if (!target) return content
 
   return `${content}
-## Tool Target
+## 适配工具
 
-This skill is initialized for ${TARGET_NAMES[target]}.
+本 skill 为 ${TARGET_NAMES[target]} 初始化。
 `
 }
 

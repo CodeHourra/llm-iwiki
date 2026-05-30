@@ -9,25 +9,35 @@ export interface PrepareSummariesResult {
   sessionCount: number
 }
 
-const SUMMARIES_FORMAT = `## 输出格式
+const SUMMARIES_FORMAT = `## 输出格式（务必遵守）
 
-请阅读下面每个会话的压缩记录，为有价值的会话生成一份 \`summaries.yaml\`，写入
-\`.llm-iwiki/tasks/summaries.yaml\`，再运行 \`llm-iwiki summarize apply\`。
+本文件（\`summaries-task.md\`）是任务说明，请勿修改它。
+请**另外新建**一个纯 YAML 文件 \`.llm-iwiki/tasks/summaries.yaml\`，然后运行：
+\`llm-iwiki summarize apply --project . --file .llm-iwiki/tasks/summaries.yaml\`
+
+输出文件规则：
+- 只能是 YAML 内容，不要写 Markdown 标题或说明文字，也不要用 \`\`\` 代码围栏把它包起来。
+- 不要保留 \`<...>\` 占位符，全部替换成真实内容。
+- \`value\` 只能取 none / low / medium / high 其中之一（不要照抄“none | low | medium | high”整行）；medium / high 才会进入经验提取。
+- \`session_id\` 必须与下方各会话块标题里的 id 完全一致。
+- 没价值的会话直接省略，不必每个都写。
+
+按下面结构填真实内容（# 后是说明，可删）：
 
 \`\`\`yaml
-project_id: <见下方 project_id>
+project_id: proj_xxxxxxxx          # 用本文件顶部的 project_id
 summaries:
-  - session_id: <会话的 session_id，原样照抄>
-    title: <一句话标题>
-    value: none | low | medium | high
+  - session_id: cc_xxxxxxxx        # 与下方会话块标题里的 id 完全一致
+    title: 一句话标题
+    value: high
     summary_markdown: |
-      用 Markdown 概括这次会话解决了什么问题、关键决策、结论。
-\`\`\`
-
-要求：
-- \`value\` 表示这次会话的沉淀价值，\`medium\` / \`high\` 会进入经验提取。
-- \`session_id\` 必须与下面给出的完全一致。
-- 没有价值的会话可以省略，不必每个都写。`
+      ## 问题
+      这次会话要解决什么。
+      ## 关键决策
+      做了哪些选择、为什么。
+      ## 结论
+      最终结果与后续动作。
+\`\`\``
 
 export function prepareSummariesTask(
   db: LlmIwikiDatabase,

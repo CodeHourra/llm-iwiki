@@ -30,7 +30,7 @@ npx @codehourra/llm-iwiki sync
 - Milestone 4（AI 协作总结）已完成：`summarize prepare` / `experiences prepare` 生成压缩后的 AI 任务，`summarize apply` / `experiences propose` 把外部 AI 产出的 YAML 落库到 `session_summaries` / `experience_candidates`。
 - Milestone 5（Obsidian 导出）已完成：`config set obsidian.vault <dir>` 配置库路径，`obsidian export` 将会话总结、已 accept 的经验和项目索引写成带 frontmatter + managed block 的 Markdown 笔记。更新采用非破坏式协议——保留用户手写区，托管块被手动改动时标记冲突并跳过，`--force` 才覆盖；`obsidian check` 只读扫描 vault 报告 drift/missing。
 - 经验生命周期：`experiences propose` 落库为候选（`experience_candidates`），`experiences candidates` 列出待审，`experiences accept/reject` 决定去留；accept 会把候选提升为正式 `experiences` 并建立 `session_experience_links`，再由 `obsidian export` 写出。
-- AI 助手集成：`skills init` 把 Claude Code / Codex / Cursor 使用的 skill 模板写入当前项目，驱动上述工作流。
+- AI 助手集成：`skills init` 把一个中文 skill（`aiwiki-knowledge`）写入当前项目的 `.agents/skills/`，让 Claude Code / Codex / Cursor 读了即可自驱动「采集 → 总结 → 经验 → 导出」全流程，并内置了 YAML 输出规则避免格式错误。
 
 ```bash
 llm-iwiki sync                                          # 采集本地 AI 工具会话
@@ -50,7 +50,7 @@ llm-iwiki skills init                                   # 写入 AI 助手 skill
 
 ### `skills init`
 
-把 AI 编程助手使用的 skill 模板写入当前项目，让 Claude Code / Codex / Cursor 能按规范驱动上面的 `summarize` / `experiences` 工作流。
+把中文 skill `aiwiki-knowledge` 写入当前项目的 `.agents/skills/`，让 Claude Code / Codex / Cursor 读了就能自驱动 `sync` → `summarize` → `experiences` → `obsidian export` 全流程。该 skill 内置了 YAML 输出规则（纯 YAML、不要代码围栏、不要占位符、`value` 四选一等），避免常见的格式错误。
 
 ```bash
 llm-iwiki skills                # 列出可用 target 与将写入的 skill（等同 skills list）
@@ -58,7 +58,7 @@ llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 ```
 
 - 裸 `skills` / `skills list`：只读列出可用 target 和将写入 `.agents/skills/` 的 skill，不落盘。
-- `--target`：只写入指定助手的模板；省略则写入全部三种。
+- `--target`：在 skill 末尾附上对应助手（Codex / Claude Code / Cursor）的适配说明；省略则不附加。
 - `--force`：覆盖已存在的同名文件（默认跳过）。
 - `--dry-run`：只预演将写入/跳过的文件，不落盘。
 

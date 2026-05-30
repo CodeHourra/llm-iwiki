@@ -17,16 +17,26 @@ interface SummaryRow {
   summary_markdown: string
 }
 
-const EXPERIENCES_FORMAT = `## 输出格式
+const EXPERIENCES_FORMAT = `## 输出格式（务必遵守）
 
-基于下面这些会话摘要，提炼出可复用的项目经验，生成 \`experiences.yaml\` 写入
-\`.llm-iwiki/tasks/experiences.yaml\`，再运行 \`llm-iwiki experiences propose\`。
+本文件（\`experiences-task.md\`）是任务说明，请勿修改它。
+请**另外新建**一个纯 YAML 文件 \`.llm-iwiki/tasks/experiences.yaml\`，然后运行：
+\`llm-iwiki experiences propose --project . --file .llm-iwiki/tasks/experiences.yaml\`
+
+输出文件规则：
+- 只能是 YAML 内容，不要写 Markdown 标题或说明文字，也不要用 \`\`\` 代码围栏把它包起来。
+- 不要保留 \`<...>\` 占位符，全部替换成真实内容。
+- 一条经验可以聚合多个会话，按主题归纳，不要逐会话复述。
+- \`source_sessions\` 必须是字符串数组，填该经验来自哪些 session_id（与下方摘要块标题里的 id 一致）。
+- \`confidence\` 可选，只能取 low / medium / high 其中之一。
+
+按下面结构填真实内容（# 后是说明，可删）：
 
 \`\`\`yaml
-project_id: <见下方 project_id>
+project_id: proj_xxxxxxxx          # 用本文件顶部的 project_id
 experiences:
-  - title: <经验标题>
-    slug: <可选，稳定短标识>
+  - title: 经验标题
+    slug: stable-short-id          # 可选，省略即可
     summary: |
       一句话说明这条经验。
     body_markdown: |
@@ -34,13 +44,9 @@ experiences:
       ## 方案
       ## 结论
     source_sessions:
-      - <相关 session_id>
-    confidence: low | medium | high
-\`\`\`
-
-要求：
-- 一条经验可以聚合多个会话，按主题归纳，不要逐会话复述。
-- \`source_sessions\` 填写该经验来自哪些 session_id。`
+      - cc_xxxxxxxx
+    confidence: medium
+\`\`\``
 
 function fetchSummaries(db: LlmIwikiDatabase, projectId: string, scope: ExperienceScope): SummaryRow[] {
   const valueClause = scope === 'changed-summaries' ? "AND value IN ('medium', 'high')" : ''

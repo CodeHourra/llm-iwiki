@@ -266,9 +266,9 @@ test('skills init dry-run reports writes without creating files', async () => {
   const exitCode = await runCli(['skills', 'init', '--dry-run'], runtime)
 
   expect(exitCode).toBe(0)
-  expect(stdout).toEqual(['skills written: 3', 'skills skipped: 0'])
+  expect(stdout).toEqual(['skills written: 1', 'skills skipped: 0'])
   expect(stderr).toEqual([])
-  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-after-session/SKILL.md'))).toBe(false)
+  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-knowledge/SKILL.md'))).toBe(false)
 })
 
 test('bare skills lists targets and templates without writing files', async () => {
@@ -283,8 +283,8 @@ test('bare skills lists targets and templates without writing files', async () =
   const joined = stdout.join('\n')
   expect(joined).toContain('可用 target:')
   expect(joined).toContain('codex  (Codex)')
-  expect(joined).toContain('aiwiki-after-session')
-  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-after-session/SKILL.md'))).toBe(false)
+  expect(joined).toContain('aiwiki-knowledge')
+  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-knowledge/SKILL.md'))).toBe(false)
 })
 
 test('skills list behaves the same as bare skills', async () => {
@@ -327,7 +327,7 @@ test('skills init rejects target without a value and writes no files', async () 
   expect(exitCode).toBe(1)
   expect(stdout).toEqual([])
   expect(stderr).toEqual(['Invalid --target. Use codex, claude-code, or cursor.'])
-  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-after-session/SKILL.md'))).toBe(false)
+  expect(existsSync(join(projectDir, '.agents/skills/aiwiki-knowledge/SKILL.md'))).toBe(false)
 })
 
 test('skills init skips existing files unless forced', async () => {
@@ -340,7 +340,7 @@ test('skills init skips existing files unless forced', async () => {
   const exitCode = await runCli(['skills', 'init'], secondRun.runtime)
 
   expect(exitCode).toBe(0)
-  expect(secondRun.stdout).toEqual(['skills written: 0', 'skills skipped: 3'])
+  expect(secondRun.stdout).toEqual(['skills written: 0', 'skills skipped: 1'])
   expect(secondRun.stderr).toEqual([])
 })
 
