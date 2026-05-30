@@ -19,5 +19,7 @@ export function getAppPaths(homeDir = homedir()): AppPaths {
 }
 
 export function getProjectTaskDir(cwd: string): string {
-  return resolve(cwd, '.llm-iwiki', 'tasks')
+  // 避免使用 "tasks" 目录名：编辑器的 YAML/Ansible 插件会把 **/tasks/*.yaml
+  // 误匹配为 Ansible 剧本并套错 schema。
+  return resolve(cwd, '.llm-iwiki', 'exchange')
 }

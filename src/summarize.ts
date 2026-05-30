@@ -12,8 +12,8 @@ export interface PrepareSummariesResult {
 const SUMMARIES_FORMAT = `## 输出格式（务必遵守）
 
 本文件（\`summaries-task.md\`）是任务说明，请勿修改它。
-请**另外新建**一个纯 YAML 文件 \`.llm-iwiki/tasks/summaries.yaml\`，然后运行：
-\`llm-iwiki summarize apply --project . --file .llm-iwiki/tasks/summaries.yaml\`
+请**另外新建**一个纯 YAML 文件 \`.llm-iwiki/exchange/summaries.yaml\`，然后运行：
+\`llm-iwiki summarize apply --project . --file .llm-iwiki/exchange/summaries.yaml\`
 
 输出文件规则：
 - 只能是 YAML 内容，不要写 Markdown 标题或说明文字，也不要用 \`\`\` 代码围栏把它包起来。

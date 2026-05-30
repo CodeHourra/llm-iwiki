@@ -20,8 +20,8 @@ interface SummaryRow {
 const EXPERIENCES_FORMAT = `## 输出格式（务必遵守）
 
 本文件（\`experiences-task.md\`）是任务说明，请勿修改它。
-请**另外新建**一个纯 YAML 文件 \`.llm-iwiki/tasks/experiences.yaml\`，然后运行：
-\`llm-iwiki experiences propose --project . --file .llm-iwiki/tasks/experiences.yaml\`
+请**另外新建**一个纯 YAML 文件 \`.llm-iwiki/exchange/experiences.yaml\`，然后运行：
+\`llm-iwiki experiences propose --project . --file .llm-iwiki/exchange/experiences.yaml\`
 
 输出文件规则：
 - 只能是 YAML 内容，不要写 Markdown 标题或说明文字，也不要用 \`\`\` 代码围栏把它包起来。
