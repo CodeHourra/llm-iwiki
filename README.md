@@ -1,5 +1,7 @@
 # llm-iwiki
 
+[简体中文](./README.zh-CN.md)
+
 Turn local AI coding sessions into a searchable Obsidian knowledge base.
 
 `llm-iwiki` collects sessions from Claude Code, Cursor, Codex, Gemini, and CodeBuddy, normalizes them by project in SQLite, prepares AI-friendly summarization tasks, stores accepted project learnings, and exports navigable Markdown notes to Obsidian.
