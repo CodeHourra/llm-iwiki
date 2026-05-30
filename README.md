@@ -23,6 +23,18 @@ npx @codehourra/llm-iwiki init
 npx @codehourra/llm-iwiki sync
 ```
 
+## 发布与变更记录
+
+项目使用 [Changesets](https://github.com/changesets/changesets) 管理版本号、`CHANGELOG.md` 与 npm 发布：
+
+```bash
+bun run changeset          # 为当前改动创建 changeset
+bun run version-packages   # 本地生成版本号和 CHANGELOG（通常由 CI 执行）
+bun run release            # 构建并发布到 npm（通常由 CI 执行）
+```
+
+每个会影响用户的 PR 应附带一个 `.changeset/*.md` 文件。PR 合并到 `master` 后，GitHub Actions 会自动创建/更新 Release PR；合并 Release PR 后，workflow 使用仓库 Secret `NPM_TOKEN` 发布到 npm。`GITHUB_TOKEN` 由 GitHub Actions 自动提供，不需要手动配置。
+
 ## 当前状态
 
 - Milestone 1（CLI 骨架与状态库）已完成：`init` / `doctor` / `projects resolve` / `projects rename`。
