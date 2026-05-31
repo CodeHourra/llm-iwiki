@@ -1,5 +1,11 @@
 # @codehourra/llm-iwiki
 
+## 0.3.2
+
+### Patch Changes
+
+- 53bea18: 新增 `-v` / `--version` 参数，用于直接打印当前 CLI 版本号。
+
 ## 0.3.1
 
 ### Patch Changes
