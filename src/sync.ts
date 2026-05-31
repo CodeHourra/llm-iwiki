@@ -16,9 +16,15 @@ export interface SyncReport {
   bySource: SourceSyncReport[]
 }
 
+export type SyncProgressEvent =
+  | { type: 'scan-start'; homeDir: string; projectFilter: string | null }
+  | { type: 'source-detected'; source: string }
+  | { type: 'source-collected'; source: string; candidateSessions: number }
+
 export interface SyncOptions {
   homeDir: string
   projectFilter?: string | null
+  onProgress?: (event: SyncProgressEvent) => void
 }
 
 function hash(value: string): string {
@@ -171,10 +177,14 @@ function markMissingSessions(
 export function runSync(db: LlmIwikiDatabase, options: SyncOptions): SyncReport {
   const now = new Date().toISOString()
   const bySource: SourceSyncReport[] = []
+  const projectFilter = options.projectFilter ?? null
+
+  options.onProgress?.({ type: 'scan-start', homeDir: options.homeDir, projectFilter })
 
   for (const collector of COLLECTORS) {
     if (!collector.detect(options.homeDir)) continue
 
+    options.onProgress?.({ type: 'source-detected', source: collector.id })
     upsertSource(db, collector, now)
     const report: SourceSyncReport = {
       source: collector.id,
@@ -186,6 +196,7 @@ export function runSync(db: LlmIwikiDatabase, options: SyncOptions): SyncReport 
     }
 
     const sessions = collector.collect(options.homeDir)
+    options.onProgress?.({ type: 'source-collected', source: collector.id, candidateSessions: sessions.length })
     const seenIds = new Set<string>()
 
     const writeAll = db.transaction(() => {

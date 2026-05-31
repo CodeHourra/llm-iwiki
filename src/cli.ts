@@ -181,18 +181,29 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
 
   if (args[0] === 'sync') {
     const projectFlag = readFlag(args, '--project')
+    const projectFilter = projectFlag ? resolveCliPath(runtime.cwd, projectFlag) : null
     const paths = getAppPaths(runtime.homeDir)
     const db = openDatabase(paths.databaseFile)
     try {
       runMigrations(db)
+      runtime.stdout('Scanning local AI session stores...')
+      if (projectFilter) runtime.stdout(`Project filter: ${projectFilter}`)
       const report = runSync(db, {
         homeDir: runtime.homeDir ?? paths.homeDir,
-        projectFilter: projectFlag ? resolveCliPath(runtime.cwd, projectFlag) : null,
+        projectFilter,
+        onProgress: (event) => {
+          if (event.type === 'source-detected') {
+            runtime.stdout(`- ${event.source}: detected, scanning sessions...`)
+          } else if (event.type === 'source-collected') {
+            runtime.stdout(`- ${event.source}: found ${event.candidateSessions} candidate sessions`)
+          }
+        },
       })
       if (report.bySource.length === 0) {
         runtime.stdout('No collectors detected on this machine.')
         return 0
       }
+      runtime.stdout('Sync summary:')
       for (const source of report.bySource) {
         runtime.stdout(
           `${source.source}: ${source.total} sessions (new ${source.new}, changed ${source.changed}, unchanged ${source.unchanged}, missing ${source.sourceMissing})`,
@@ -218,8 +229,9 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
         return 0
       }
       for (const project of projects) {
-        const name = project.displayName ?? project.canonicalName
-        runtime.stdout(`${project.id}  ${project.sessionCount} sessions  ${name}`)
+        const name = project.displayName ?? project.slug
+        const repo = project.canonicalRepoUrl ? `  repo: ${project.canonicalRepoUrl}` : ''
+        runtime.stdout(`${project.id}  ${project.sessionCount} sessions  ${name}${repo}`)
       }
       return 0
     } finally {

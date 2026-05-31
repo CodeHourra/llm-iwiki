@@ -38,6 +38,21 @@ function getProjectCount(databaseFile: string): number {
   }
 }
 
+function writeClaudeSession(homeDir: string, cwd: string, sessionId: string, content: string): void {
+  const dir = join(homeDir, '.claude', 'projects', cwd.replace(/\//g, '-'))
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, `${sessionId}.jsonl`),
+    `${JSON.stringify({
+      type: 'user',
+      sessionId,
+      cwd,
+      timestamp: '2026-05-01T10:00:00.000Z',
+      message: { role: 'user', content },
+    })}\n`,
+  )
+}
+
 test('prints help for --help', async () => {
   const stdout: string[] = []
   const stderr: string[] = []
@@ -52,6 +67,35 @@ test('prints help for --help', async () => {
   expect(stderr).toEqual([])
   expect(stdout.join('\n')).toContain('llm-iwiki')
   expect(stdout.join('\n')).toContain('Usage:')
+})
+
+test('sync reports scanning progress when no collectors are detected', async () => {
+  const homeDir = join(tmpRoot, 'sync-empty-home')
+  const { runtime, stdout, stderr } = createRuntime(homeDir)
+
+  const exitCode = await runCli(['sync'], runtime)
+
+  expect(exitCode).toBe(0)
+  expect(stderr).toEqual([])
+  expect(stdout).toEqual(['Scanning local AI session stores...', 'No collectors detected on this machine.'])
+})
+
+test('sync reports per-source scan progress and final summary', async () => {
+  const homeDir = join(tmpRoot, 'sync-progress-home')
+  const cwd = '/Users/demo/Codes/llm-iwiki-demo-project'
+  writeClaudeSession(homeDir, cwd, 'sess-1', '沉淀一次会话')
+  const { runtime, stdout, stderr } = createRuntime(homeDir, cwd)
+
+  const exitCode = await runCli(['sync'], runtime)
+
+  expect(exitCode).toBe(0)
+  expect(stderr).toEqual([])
+  const output = stdout.join('\n')
+  expect(output).toContain('Scanning local AI session stores...')
+  expect(output).toContain('- claude-code: detected, scanning sessions...')
+  expect(output).toContain('- claude-code: found 1 candidate sessions')
+  expect(output).toContain('Sync summary:')
+  expect(output).toContain('claude-code: 1 sessions (new 1, changed 0, unchanged 0, missing 0)')
 })
 
 test('doctor fails for a fresh home without creating state', async () => {
@@ -177,6 +221,32 @@ test('projects resolve and rename relative paths against runtime cwd', async () 
   expect(renameExitCode).toBe(0)
   expect(renamed.id).toBe(resolved.id)
   expect(renamed.displayName).toBe('Child Project')
+})
+
+test('projects list shows friendly names instead of full canonical repo urls', async () => {
+  const homeDir = join(tmpRoot, 'friendly-project-list-home')
+  const paths = getAppPaths(homeDir)
+  const runtime = createRuntime(homeDir)
+  const now = '2026-01-01T00:00:00.000Z'
+
+  await runCli(['init'], runtime.runtime)
+  const db = openDatabase(paths.databaseFile)
+  try {
+    db.query(`INSERT INTO projects (id, canonical_name, slug, canonical_repo_url, identity_source, created_at, updated_at)
+      VALUES ('proj_repo', 'github.com/CodeHourra/llm-iwiki', 'github-com-codehourra-llm-iwiki', 'github.com/CodeHourra/llm-iwiki', 'git_remote', ?, ?)`).run(now, now)
+    db.query(`INSERT INTO sessions (id, source_id, source_session_id, project_id, message_count, content_hash, status, first_seen_at, last_seen_at)
+      VALUES ('ses_repo', 'cursor', 'src-1', 'proj_repo', 1, 'h', 'new', ?, ?)`).run(now, now)
+  } finally {
+    db.close()
+  }
+
+  const exitCode = await runCli(['projects', 'list'], runtime.runtime)
+
+  expect(exitCode).toBe(0)
+  const output = runtime.stdout.join('\n')
+  expect(output).toContain('github-com-codehourra-llm-iwiki')
+  expect(output).toContain('repo: github.com/CodeHourra/llm-iwiki')
+  expect(output).not.toContain('sessions  github.com/CodeHourra/llm-iwiki')
 })
 
 test('projects resolve fails for nonexistent path without inserting a project', async () => {
