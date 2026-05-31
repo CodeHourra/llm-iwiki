@@ -69,6 +69,23 @@ test('prints help for --help', async () => {
   expect(stdout.join('\n')).toContain('Usage:')
 })
 
+test('prints package version for -v and --version', async () => {
+  const packageJson = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8')) as {
+    version: string
+  }
+
+  for (const flag of ['-v', '--version']) {
+    const homeDir = join(tmpRoot, `version-${flag.replace(/^-+/, '')}`)
+    const { runtime, stdout, stderr } = createRuntime(homeDir)
+
+    const exitCode = await runCli([flag], runtime)
+
+    expect(exitCode).toBe(0)
+    expect(stderr).toEqual([])
+    expect(stdout).toEqual([packageJson.version])
+  }
+})
+
 test('sync reports scanning progress when no collectors are detected', async () => {
   const homeDir = join(tmpRoot, 'sync-empty-home')
   const { runtime, stdout, stderr } = createRuntime(homeDir)
