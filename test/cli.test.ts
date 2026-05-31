@@ -179,6 +179,32 @@ test('projects resolve and rename relative paths against runtime cwd', async () 
   expect(renamed.displayName).toBe('Child Project')
 })
 
+test('projects list shows friendly names instead of full canonical repo urls', async () => {
+  const homeDir = join(tmpRoot, 'friendly-project-list-home')
+  const paths = getAppPaths(homeDir)
+  const runtime = createRuntime(homeDir)
+  const now = '2026-01-01T00:00:00.000Z'
+
+  await runCli(['init'], runtime.runtime)
+  const db = openDatabase(paths.databaseFile)
+  try {
+    db.query(`INSERT INTO projects (id, canonical_name, slug, canonical_repo_url, identity_source, created_at, updated_at)
+      VALUES ('proj_repo', 'github.com/CodeHourra/llm-iwiki', 'github-com-codehourra-llm-iwiki', 'github.com/CodeHourra/llm-iwiki', 'git_remote', ?, ?)`).run(now, now)
+    db.query(`INSERT INTO sessions (id, source_id, source_session_id, project_id, message_count, content_hash, status, first_seen_at, last_seen_at)
+      VALUES ('ses_repo', 'cursor', 'src-1', 'proj_repo', 1, 'h', 'new', ?, ?)`).run(now, now)
+  } finally {
+    db.close()
+  }
+
+  const exitCode = await runCli(['projects', 'list'], runtime.runtime)
+
+  expect(exitCode).toBe(0)
+  const output = runtime.stdout.join('\n')
+  expect(output).toContain('github-com-codehourra-llm-iwiki')
+  expect(output).toContain('repo: github.com/CodeHourra/llm-iwiki')
+  expect(output).not.toContain('sessions  github.com/CodeHourra/llm-iwiki')
+})
+
 test('projects resolve fails for nonexistent path without inserting a project', async () => {
   const homeDir = join(tmpRoot, 'missing-path-home')
   const missingPath = join(tmpRoot, 'does-not-exist')

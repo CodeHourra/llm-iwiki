@@ -218,8 +218,9 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
         return 0
       }
       for (const project of projects) {
-        const name = project.displayName ?? project.canonicalName
-        runtime.stdout(`${project.id}  ${project.sessionCount} sessions  ${name}`)
+        const name = project.displayName ?? project.slug
+        const repo = project.canonicalRepoUrl ? `  repo: ${project.canonicalRepoUrl}` : ''
+        runtime.stdout(`${project.id}  ${project.sessionCount} sessions  ${name}${repo}`)
       }
       return 0
     } finally {
