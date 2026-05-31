@@ -46,6 +46,7 @@
     "typecheck": "tsc --noEmit",
     "build": "bun build src/index.ts --target node --minify --external better-sqlite3 --external bun:sqlite --outfile dist/index.js",
     "changeset": "changeset",
+    "check:changeset": "bun run scripts/check-changeset-required.ts",
     "version-packages": "changeset version",
     "release": "bun run build && changeset publish",
     "prepublishOnly": "bun run build"
