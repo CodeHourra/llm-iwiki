@@ -36,6 +36,8 @@ import {
 import { applySummaries, prepareSummariesTask } from './summarize'
 import { runSync } from './sync'
 
+const PACKAGE_JSON_PATH = new URL('../package.json', import.meta.url)
+
 export interface CliRuntime {
   cwd: string
   homeDir?: string
@@ -76,6 +78,7 @@ Usage:
   llm-iwiki skills init [--target codex|claude-code|cursor] [--force] [--dry-run]
 
 Global flags:
+  -v, --version  打印版本号
   --debug   出错时打印详细堆栈
 `
 
@@ -117,6 +120,14 @@ function reportError(error: unknown, runtime: CliRuntime, debug: boolean): void 
   if (debug && error instanceof Error && error.stack) runtime.stderr(error.stack)
 }
 
+function readPackageVersion(): string {
+  const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf8')) as { version?: unknown }
+  if (typeof packageJson.version !== 'string' || packageJson.version.length === 0) {
+    throw new Error('Unable to read package version.')
+  }
+  return packageJson.version
+}
+
 /**
  * 解析 --project（默认当前目录），接受 path / proj_id / name，不创建空项目。
  */
@@ -138,6 +149,11 @@ export async function runCli(args: string[], runtime: CliRuntime): Promise<numbe
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     runtime.stdout(HELP)
+    return 0
+  }
+
+  if (args[0] === '--version' || args[0] === '-v') {
+    runtime.stdout(readPackageVersion())
     return 0
   }
 
